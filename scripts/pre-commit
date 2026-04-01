@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Pre-commit hook — blocks pushes with secrets, infra refs, or debug artifacts.
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+exec ./scripts/safety-check.sh

@@ -1,1 +1,37 @@
 target/
+
+# Key material — NEVER commit
+*.pem
+agent-key.*
+agent-card.json
+delegation-token.json
+challenge.json
+response.json
+a2a-agent-card.json
+
+# Audit database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment / secrets
+.env
+.env.*
+*.secret
+*.key
+*.p12
+*.pfx
+
+# Build artifacts
+*.dSYM/

@@ -142,5 +142,5 @@ Apache 2.0 — free to use, modify, and distribute.
 ## Links
 
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
-- **Contact:** michaelnvgt@icloud.com
-- **Author:** Michael N Thornton / GrokingClaw Labs
+- **Contact:** security@grokingclaw.com
+- **Author:** GrokingClaw Labs
