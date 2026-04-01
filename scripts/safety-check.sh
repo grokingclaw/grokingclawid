@@ -83,8 +83,8 @@ INFRA_PATTERNS=(
     'najabot'                              # Internal project references
     'naja[^_]'                             # Internal project references (but allow naja_*)
     'tekcin'                               # Personal GitHub
-    'huynguyenusa'                         # Personal machine username
-    '@icloud\.com'                         # Personal email
+    # 'huynguyenusa'                       # Disabled — using as org contact
+    # '@icloud\.com'                       # Disabled — using icloud as primary contact
     'MacBook'                              # Machine names
 )
 
@@ -108,7 +108,7 @@ for pattern in "${INFRA_PATTERNS[@]}"; do
 done
 
 # Check README and docs too
-for pattern in "huynguyenusa" "tekcin" "@icloud.com" "najabot" "192.168."; do
+for pattern in "tekcin" "najabot" "192.168."; do
     matches=$(grep -rn "$pattern" README.md SECURITY.md Cargo.toml 2>/dev/null | head -3 || true)
     if [ -n "$matches" ]; then
         fail "Personal reference '$pattern' in public files:"

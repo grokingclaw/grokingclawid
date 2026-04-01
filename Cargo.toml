@@ -2,7 +2,7 @@
 name = "grokingclawid"
 version = "0.1.0"
 edition = "2021"
-authors = ["GrokingClaw Labs <hello@grokingclaw.com>"]
+authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
 description = "GrokingClawID - AI Agent Identity Management CLI"
 license = "Apache-2.0"
 
