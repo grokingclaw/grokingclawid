@@ -1,0 +1,21 @@
+{
+  "name": "@grokingclaw/clawid-mcp",
+  "version": "0.1.0",
+  "description": "GrokingClawID MCP Tool Server — Cryptographic agent identity, auth, and payments for any MCP-compatible agent",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "clawid-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  },
+  "keywords": ["mcp", "agent", "identity", "crypto", "post-quantum", "grokingclaw"],
+  "author": "GrokingClaw Labs",
+  "license": "Apache-2.0",
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
