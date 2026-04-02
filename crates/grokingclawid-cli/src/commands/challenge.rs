@@ -9,9 +9,9 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
-use crate::challenge::{self, ChallengeResponse};
-use crate::crypto;
-use crate::models::{AgentCard, CryptoScheme};
+use grokingclawid_core::challenge::{self, ChallengeResponse};
+use grokingclawid_core::crypto;
+use grokingclawid_core::models::{AgentCard, CryptoScheme};
 
 /// Execute `challenge` — create a verification challenge for a peer.
 pub fn execute_challenge(

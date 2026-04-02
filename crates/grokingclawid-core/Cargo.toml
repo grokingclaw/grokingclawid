@@ -1,0 +1,58 @@
+[package]
+name = "grokingclawid-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
+description = "GrokingClawID core library - AI Agent Identity Management"
+license = "Apache-2.0"
+
+[dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Crypto — Ed25519 (classical) + ML-DSA-65 (post-quantum hybrid)
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+fips204 = "0.4"
+rand = "0.8"
+base64 = "0.21"
+sha2 = "0.10"
+blake2 = "0.10"
+
+# Time & IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Storage
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Async + HTTP (for IOTA testnet RPC)
+tokio = { version = "1.2", features = ["rt-multi-thread", "macros"] }
+
+# Utilities
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+hex = "0.4"
+url = "2.0"
+bech32 = "0.11"
+bs58 = "0.5"
+
+[features]
+default = ["wallet"]
+wallet = ["dep:reqwest", "dep:tokio-tungstenite", "dep:futures-util"]
+
+[dependencies.reqwest]
+version = "0.12"
+features = ["json", "rustls-tls"]
+default-features = false
+optional = true
+
+[dependencies.tokio-tungstenite]
+version = "0.24"
+features = ["rustls-tls-native-roots"]
+optional = true
+
+[dependencies.futures-util]
+version = "0.3"
+optional = true

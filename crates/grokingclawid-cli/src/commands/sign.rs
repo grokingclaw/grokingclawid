@@ -7,11 +7,11 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
-use crate::crypto;
-use crate::httpsig::{
+use grokingclawid_core::crypto;
+use grokingclawid_core::httpsig::{
     self, Component, HttpRequest, SignatureAlgorithm, SignatureParams,
 };
-use crate::models::{AgentCard, CryptoScheme};
+use grokingclawid_core::models::{AgentCard, CryptoScheme};
 
 /// Execute `sign` — create RFC 9421 signature for an HTTP request.
 pub fn execute_sign(

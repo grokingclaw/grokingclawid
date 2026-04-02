@@ -11,7 +11,7 @@
 //! ## Usage
 //!
 //! ```no_run
-//! use grokingclawid::httpsig::{SignatureParams, sign_request, verify_request};
+//! use grokingclawid_core::httpsig::{SignatureParams, sign_request, verify_request};
 //! ```
 //!
 //! ## Compatibility

@@ -1,0 +1,27 @@
+[package]
+name = "grokingclawid-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
+description = "GrokingClawID CLI - AI Agent Identity Management"
+license = "Apache-2.0"
+
+[dependencies]
+grokingclawid-core = { path = "../grokingclawid-core", features = ["wallet"] }
+clap = { version = "4.4", features = ["derive"] }
+anyhow = "1.0"
+serde_json = "1.0"
+chrono = "0.4"
+uuid = { version = "1.6", features = ["v4"] }
+base64 = "0.21"
+tokio = { version = "1.2", features = ["rt-multi-thread", "macros"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.9"
+
+[[bin]]
+name = "grokingclawid"
+path = "src/main.rs"

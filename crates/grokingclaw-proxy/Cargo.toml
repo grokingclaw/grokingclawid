@@ -1,0 +1,45 @@
+[package]
+name = "grokingclaw-proxy"
+version = "0.1.0"
+edition = "2021"
+authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
+description = "GrokingClaw sidecar proxy — scope enforcement, identity signing, audit logging"
+license = "Apache-2.0"
+
+[dependencies]
+# Core library (crypto, models, audit)
+grokingclawid-core = { path = "../grokingclawid-core" }
+
+# HTTP proxy stack
+hyper = { version = "1.8", features = ["http1", "http2", "server", "client"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1", "http2", "server", "client-legacy"] }
+http-body-util = "0.1"
+bytes = "1.0"
+
+# Async runtime
+tokio = { version = "1.2", features = ["rt-multi-thread", "macros", "net", "io-util", "time"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# Time & IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Crypto (for signing)
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+base64 = "0.21"
+
+# SQLite (for audit — re-export from core)
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Utilities
+anyhow = "1.0"
+url = "2.0"
+
+[dev-dependencies]
+tempfile = "3.9"

@@ -11,9 +11,9 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::audit;
-use crate::crypto;
-use crate::models::{AgentCard, AgentType, CryptoScheme};
+use grokingclawid_core::audit;
+use grokingclawid_core::crypto;
+use grokingclawid_core::models::{AgentCard, AgentType, CryptoScheme};
 
 /// Parse a human-readable TTL string like "24h", "30m", "7d" into a chrono::Duration.
 pub fn parse_ttl(ttl: &str) -> Result<Duration> {

@@ -3,28 +3,18 @@
 //! Derives an IOTA wallet address from the agent's Ed25519 key,
 //! checks balance, requests faucet tokens, and transfers IOTA.
 
-#[cfg(feature = "wallet")]
 use anyhow::{Context, Result};
-#[cfg(feature = "wallet")]
 use std::fs;
-#[cfg(feature = "wallet")]
 use std::path::Path;
 
-#[cfg(feature = "wallet")]
-use crate::crypto;
-#[cfg(feature = "wallet")]
-use crate::iota::{self, IotaClient};
-#[cfg(feature = "wallet")]
-use crate::ws::{self, IotaWsClient, EventFilter};
-#[cfg(feature = "wallet")]
-use crate::models::{AgentCard, CryptoScheme, PqAttestation, WalletReceipt};
-#[cfg(feature = "wallet")]
-use crate::audit;
-#[cfg(feature = "wallet")]
+use grokingclawid_core::crypto;
+use grokingclawid_core::iota::{self, IotaClient};
+use grokingclawid_core::ws::{self, IotaWsClient, EventFilter};
+use grokingclawid_core::models::{AgentCard, CryptoScheme, PqAttestation, WalletReceipt};
+use grokingclawid_core::audit;
 use base64::Engine;
 
 /// Execute `wallet init` — derive IOTA address from agent card.
-#[cfg(feature = "wallet")]
 pub fn execute_init(card_path: &Path) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -45,7 +35,6 @@ pub fn execute_init(card_path: &Path) -> Result<()> {
 }
 
 /// Execute `wallet balance` — check IOTA balance.
-#[cfg(feature = "wallet")]
 pub fn execute_balance(card_path: &Path, network: &str) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -71,7 +60,6 @@ pub fn execute_balance(card_path: &Path, network: &str) -> Result<()> {
 }
 
 /// Execute `wallet faucet` — request test tokens.
-#[cfg(feature = "wallet")]
 pub fn execute_faucet(card_path: &Path, network: &str) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -95,7 +83,6 @@ pub fn execute_faucet(card_path: &Path, network: &str) -> Result<()> {
 }
 
 /// Execute `wallet coins` — list all coin objects.
-#[cfg(feature = "wallet")]
 pub fn execute_coins(card_path: &Path, network: &str) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -137,7 +124,6 @@ pub fn execute_coins(card_path: &Path, network: &str) -> Result<()> {
 ///
 /// This means even when quantum computers break Ed25519, the PQ attestation
 /// in our audit trail still proves exactly who authorized each transaction.
-#[cfg(feature = "wallet")]
 pub fn execute_send(
     card_path: &Path,
     key_path: &Path,
@@ -296,7 +282,6 @@ pub fn execute_send(
 ///
 /// Opens a persistent WebSocket connection to an IOTA full node and
 /// streams all events involving the agent's derived address.
-#[cfg(feature = "wallet")]
 pub fn execute_watch(card_path: &Path, network: &str, limit: u32) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -357,7 +342,6 @@ pub fn execute_watch(card_path: &Path, network: &str, limit: u32) -> Result<()> 
 /// Execute `wallet events` — query historical events for an agent's address.
 ///
 /// Uses HTTP JSON-RPC to fetch past events (complement to WebSocket streaming).
-#[cfg(feature = "wallet")]
 pub fn execute_events(card_path: &Path, network: &str, limit: u32) -> Result<()> {
     let card = load_card(card_path)?;
     let address = derive_address_from_card(&card)?;
@@ -408,7 +392,6 @@ pub fn execute_events(card_path: &Path, network: &str, limit: u32) -> Result<()>
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-#[cfg(feature = "wallet")]
 fn make_ws_client(network: &str) -> IotaWsClient {
     match network {
         "devnet" => IotaWsClient::devnet(),
@@ -416,7 +399,6 @@ fn make_ws_client(network: &str) -> IotaWsClient {
     }
 }
 
-#[cfg(feature = "wallet")]
 fn ws_url_for_network(network: &str) -> &str {
     match network {
         "devnet" => ws::DEVNET_WS,
@@ -424,7 +406,6 @@ fn ws_url_for_network(network: &str) -> &str {
     }
 }
 
-#[cfg(feature = "wallet")]
 fn load_card(card_path: &Path) -> Result<AgentCard> {
     let card_json = fs::read_to_string(card_path)
         .with_context(|| format!("Failed to read card: {}", card_path.display()))?;
@@ -432,7 +413,6 @@ fn load_card(card_path: &Path) -> Result<AgentCard> {
         .with_context(|| format!("Failed to parse card: {}", card_path.display()))
 }
 
-#[cfg(feature = "wallet")]
 fn derive_address_from_card(card: &AgentCard) -> Result<String> {
     use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
     let pub_bytes = BASE64
@@ -444,7 +424,6 @@ fn derive_address_from_card(card: &AgentCard) -> Result<String> {
     Ok(iota::derive_iota_address(&pub_array))
 }
 
-#[cfg(feature = "wallet")]
 fn make_client(network: &str) -> IotaClient {
     match network {
         "devnet" => IotaClient::devnet(),
@@ -456,7 +435,6 @@ fn make_client(network: &str) -> IotaClient {
     }
 }
 
-#[cfg(feature = "wallet")]
 fn truncate(s: &str, max: usize) -> &str {
     if s.len() > max {
         &s[..max]

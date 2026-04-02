@@ -12,16 +12,7 @@
 //! - `export`   — Export agent card to A2A format
 //! - `wallet`   — IOTA testnet wallet operations
 
-mod audit;
 mod commands;
-mod crypto;
-mod challenge;
-mod httpsig;
-#[cfg(feature = "wallet")]
-mod iota;
-#[cfg(feature = "wallet")]
-mod ws;
-mod models;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -248,7 +239,6 @@ enum Commands {
     },
 
     /// IOTA testnet wallet operations
-    #[cfg(feature = "wallet")]
     Wallet {
         #[command(subcommand)]
         action: WalletAction,
@@ -256,7 +246,6 @@ enum Commands {
 }
 
 /// Wallet sub-subcommands.
-#[cfg(feature = "wallet")]
 #[derive(Subcommand)]
 enum WalletAction {
     /// Initialize wallet — derive IOTA address from agent card
@@ -446,7 +435,6 @@ fn main() {
             pq_signature.as_deref(), &agent_card, &headers,
         ),
 
-        #[cfg(feature = "wallet")]
         Commands::Wallet { action } => match action {
             WalletAction::Init { agent_card } => {
                 commands::wallet::execute_init(&agent_card)

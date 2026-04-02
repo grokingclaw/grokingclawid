@@ -8,8 +8,8 @@ use std::fs;
 use std::path::Path;
 
 use crate::commands::issue::card_signing_payload;
-use crate::crypto;
-use crate::models::{AgentCard, CryptoScheme};
+use grokingclawid_core::crypto;
+use grokingclawid_core::models::{AgentCard, CryptoScheme};
 
 /// Execute the `verify` command.
 pub fn execute(card_path: &Path) -> Result<()> {

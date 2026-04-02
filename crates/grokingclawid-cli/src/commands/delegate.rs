@@ -11,10 +11,10 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use crate::audit;
+use grokingclawid_core::audit;
 use crate::commands::issue::parse_ttl;
-use crate::crypto;
-use crate::models::{AgentCard, CryptoScheme, DelegationToken};
+use grokingclawid_core::crypto;
+use grokingclawid_core::models::{AgentCard, CryptoScheme, DelegationToken};
 
 /// Execute the `delegate` command.
 pub fn execute(

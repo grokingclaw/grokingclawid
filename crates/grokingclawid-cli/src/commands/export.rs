@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
-use crate::models::AgentCard;
+use grokingclawid_core::models::AgentCard;
 
 /// Execute the `export` command.
 pub fn execute(card_path: &Path, base_url: &str, output: Option<&Path>) -> Result<()> {
