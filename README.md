@@ -25,12 +25,12 @@ Every agent security company builds locks. Nobody makes unforgeable keys. Grokin
 ## Install
 
 ```bash
-# From source
-cargo install --path .
+# From source (CLI only)
+cargo install --path crates/grokingclawid-cli
 
-# Or build directly
+# Or build everything
 cargo build --release
-# Binary at target/release/grokingclawid (4.3MB)
+# Binaries at target/release/grokingclawid and target/release/grokingclaw
 ```
 
 **Requirements:** Rust 1.70+, no external dependencies at runtime.
@@ -104,28 +104,45 @@ All crypto runs locally. No key material leaves your machine. No cloud dependenc
 
 ## Project Structure
 
+Cargo workspace with 4 crates (~12,000 LOC Rust):
+
 ```
-src/
-├── main.rs          # CLI entry + Clap commands
-├── crypto.rs        # Ed25519 + ML-DSA-65 hybrid crypto
-├── models.rs        # Identity, AgentCard, DelegationChain types
-├── audit.rs         # Hash-chained tamper-evident audit log
-├── challenge.rs     # Challenge-response authentication
-├── httpsig.rs       # HTTP message signature (RFC 9421)
-├── iota.rs          # IOTA Rebased wallet integration
-├── ws.rs            # WebSocket transport
-└── commands/        # CLI subcommands
-    ├── issue.rs     # Create new identities
-    ├── sign.rs      # Sign messages/files
-    ├── verify.rs    # Verify signatures
-    ├── export.rs    # Export agent cards
-    ├── delegate.rs  # Delegation chains
-    ├── challenge.rs # Challenge-response
-    ├── wallet.rs    # IOTA wallet ops
-    └── audit.rs     # Audit log queries
-tests/
-└── integration_tests.rs
-mcp-server/          # MCP server (Node.js)
+crates/
+├── grokingclawid-core/      # Shared library
+│   └── src/
+│       ├── crypto.rs         # Ed25519 + ML-DSA-65 hybrid crypto
+│       ├── models.rs         # Identity, AgentCard, DelegationChain types
+│       ├── audit.rs          # Hash-chained tamper-evident audit log
+│       ├── challenge.rs      # Challenge-response authentication
+│       ├── httpsig.rs        # HTTP message signature (RFC 9421)
+│       ├── iota.rs           # IOTA Rebased wallet integration
+│       └── ws.rs             # WebSocket transport
+│
+├── grokingclawid-cli/        # CLI binary (grokingclawid)
+│   └── src/
+│       ├── main.rs           # CLI entry + Clap commands
+│       └── commands/         # issue, sign, verify, export, delegate, wallet, audit
+│
+├── grokingclaw-proxy/        # Sidecar HTTP proxy
+│   └── src/
+│       ├── server.rs         # HTTP CONNECT tunnel + forward proxy
+│       ├── scope.rs          # Domain allowlist + rate limiting
+│       ├── signer.rs         # RFC 9421 request signing injection
+│       └── audit.rs          # Proxy-level audit logging
+│
+└── grokingclaw-daemon/       # Agent host daemon (grokingclaw)
+    └── src/
+        ├── daemon.rs         # State management, local birth
+        ├── supervisor.rs     # Process lifecycle, health checks, restart budget
+        ├── ipc.rs            # Unix socket JSON-RPC 2.0 server
+        ├── mesh.rs           # Mesh networking (Headscale/WireGuard)
+        ├── birth.rs          # Birth protocol (dual-parent signing)
+        ├── templates.rs      # Template registry + installer
+        ├── anchor.rs         # Merkle breadcrumb anchoring
+        ├── updates.rs        # Daemon + template update checker
+        └── main.rs           # CLI (start/stop/status/birth/agents/mesh/audit)
+
+mcp-server/                   # MCP server (Node.js)
 ├── index.js
 ├── test.js
 └── README.md
