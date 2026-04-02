@@ -350,8 +350,49 @@ async fn main() -> Result<()> {
 async fn cmd_start(
     config: config::DaemonConfig,
     root: PathBuf,
-    _foreground: bool,
+    foreground: bool,
 ) -> Result<()> {
+    // Check if already running (before fork)
+    let pid_path = config.pid_path()?;
+
+    // If not foreground, daemonize by re-execing ourselves with --foreground
+    if !foreground {
+        if let Some(pid) = daemon::check_already_running(&pid_path)? {
+            anyhow::bail!("Daemon is already running (PID {})", pid);
+        }
+
+        let exe = std::env::current_exe().context("Could not find current executable")?;
+        let log_path = root.join("daemon.log");
+
+        // Build args: re-exec with --foreground
+        let mut args: Vec<String> = std::env::args().collect();
+        // Find "start" and add "--foreground" after it
+        if let Some(pos) = args.iter().position(|a| a == "start") {
+            args.insert(pos + 1, "--foreground".to_string());
+        }
+
+        let log_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .with_context(|| format!("Could not open log file: {}", log_path.display()))?;
+        let stderr_file = log_file.try_clone()?;
+
+        let child = std::process::Command::new(exe)
+            .args(&args[1..])  // skip argv[0]
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::from(log_file))
+            .stderr(std::process::Stdio::from(stderr_file))
+            .spawn()
+            .context("Failed to spawn daemon process")?;
+
+        println!("🦀 GrokingClaw daemon started (PID {})", child.id());
+        println!("   Log: {}", log_path.display());
+        return Ok(());
+    }
+
+    // === Foreground mode (actual daemon logic) ===
+
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter(
