@@ -127,7 +127,7 @@ The CLI itself has no agent limit — the 5-agent limit applies to managed featu
 ## Contact
 
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
-- **Email:** michaelnvgt@icloud.com
-- **Enterprise inquiries:** michaelnvgt@icloud.com
+- **Email:** contact@grokingclaw.com
+- **Enterprise inquiries:** contact@grokingclaw.com
 
 © 2026 GrokingClaw Labs. All rights reserved.

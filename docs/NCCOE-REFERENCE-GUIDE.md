@@ -1,8 +1,8 @@
 # GrokingClawID — NCCoE Reference Implementation Guide
 
-**Version:** 1.0 | **Date:** April 2, 2026 | **Author:** Michael N Thornton, GrokingClaw Labs  
+**Version:** 1.0 | **Date:** April 2, 2026 | **Author:** Michael Thornton, GrokingClaw Labs  
 **NIST Reference:** SP 1800-xx — Software and AI Agent Identity and Authorization  
-**Contact:** michaelnvgt@icloud.com
+**Contact:** contact@grokingclaw.com
 
 ---
 
@@ -675,7 +675,7 @@ $ cargo test
 
 - **Repository:** https://github.com/grokingclaw/grokingclawid
 - **License:** Apache 2.0
-- **Author:** Michael N Thornton (michaelnvgt@icloud.com)
+- **Author:** Michael Thornton (contact@grokingclaw.com)
 - **Organization:** GrokingClaw Labs
 - **Binary releases:** Available on request; `cargo install` from source
 - **Demo availability:** Live demo with working CLI, MCP guard, and agent-to-agent auth

@@ -220,5 +220,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and PR p
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 - **Security audit:** 0 critical, 0 high, 0 medium — [details](CHANGELOG.md#041--2026-04-03)
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
-- **Author:** Michael N Thornton, GrokingClaw Labs
-- **Contact:** michaelnvgt@icloud.com
+- **Author:** Michael Thornton, GrokingClaw Labs
+- **Contact:** contact@grokingclaw.com
