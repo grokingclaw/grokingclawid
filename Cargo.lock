@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "grokingclaw-daemon"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "grokingclaw-proxy"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "grokingclawid-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "grokingclawid-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "base64 0.21.7",

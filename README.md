@@ -4,8 +4,8 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-97%20passing-green.svg)](#tests)
-[![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)](CHANGELOG.md)
+[![Tests](https://img.shields.io/badge/tests-119%20passing-green.svg)](#tests)
+[![Version](https://img.shields.io/badge/version-0.4.1-brightgreen.svg)](CHANGELOG.md)
 [![CI](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml/badge.svg)](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml)
 
 GrokingClawID creates, manages, and verifies unforgeable cryptographic identities for AI agents. It's the foundation layer that authorization systems, governance platforms, and agent runtimes build on.
@@ -24,10 +24,12 @@ GrokingClawID creates, manages, and verifies unforgeable cryptographic identitie
 | **MCP auth guard** | Wrap any MCP server with identity enforcement |
 | **Challenge-response** | Mutual authentication without shared secrets |
 | **HTTP signatures** | RFC 9421 request signing (classical + PQ) |
-| **Audit log** | Hash-chained, signed, tamper-evident |
-| **IOTA wallet** | Agent-to-agent payments (same Ed25519 key) |
+| **Audit log** | Hash-chained, signed, tamper-evident (\x00-delimited fields) |
+| **IOTA wallet** | Agent-to-agent payments (same Ed25519 key), testnet funded |
 | **MCP tool server** | Expose all operations to MCP-compatible agents |
+| **A2A protocol server** | Google A2A JSON-RPC 2.0 — discovery, tasks, PQ-verified |
 | **Daemon** | Agent host with mesh networking, birth protocol, Merkle anchoring |
+| **E2E lab** | 12-step integration test — 33 assertions, single script |
 
 ## Install
 
@@ -166,20 +168,29 @@ grokingclawid/
 └── LICENSE                       # Apache 2.0
 ```
 
-**~22,000 lines of Rust** across 4 crates. 97 tests.
+**~15,500 lines of Rust** across 4 crates. 119 tests. Security audited.
 
 ## Tests
 
 ```bash
 cargo test
-# 97 passed, 0 failed
+# 119 passed, 0 failed, 0 warnings
 #   44 — core (crypto, license, audit, revocation, challenge, httpsig)
 #   10 — proxy (scope, signing, tunneling)
-#   28 — daemon (config, supervisor, birth, mesh, templates)
+#    9 — daemon (config, supervisor, birth, mesh, templates, A2A)
 #   13 — CLI integration tests
-#    1 — CLI (TTL parsing)
+#   42 — core unit tests
 #    1 — doctest (httpsig example)
 ```
+
+### E2E Lab
+
+```bash
+./examples/run-lab.sh         # 12 steps, 33 assertions
+./examples/run-lab.sh --keep  # Leave daemon running after tests
+```
+
+Exercises: identity → template → birth → A2A → challenge → rotation → revocation → audit.
 
 ## Standards Compliance
 
@@ -207,7 +218,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and PR p
 ## Links
 
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
-
+- **Security audit:** 0 critical, 0 high, 0 medium — [details](CHANGELOG.md#041--2026-04-03)
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
 - **Author:** Michael N Thornton, GrokingClaw Labs
 - **Contact:** michaelnvgt@icloud.com

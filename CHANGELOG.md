@@ -4,6 +4,35 @@ All notable changes to GrokingClawID are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] — 2026-04-03
+
+### Security
+- **Key file permissions** — private key PEM files now written as 0o600 (was default umask). Fixed in `issue`, `rotate`, and daemon `birth`.
+- **Audit hash chain** — fields now separated by `\x00` to prevent boundary collision attacks.
+- **A2A auth enforcement** — RPC endpoints require ClawID signature by default (`require_auth = true`). Agent card discovery remains public.
+- **Proxy HTTPS guard** — forward proxy rejects HTTPS requests with clear error (use CONNECT tunnel instead).
+- **PQ variable cleanup** — renamed dead `_pq_ok` → `_pq_checked` in challenge verification.
+- **WebSocket replay protection** — sequence tracking for signed WS messages.
+- **IOTA address derivation** — added flag byte prefix per IOTA Rebased spec.
+- **Graceful agent shutdown** — SIGTERM before SIGKILL with configurable timeout.
+- **Canonical JSON signing** — card signing payload uses sorted keys.
+- **Rate limiter** — sliding window (was wall-clock reset).
+- **Agent name validation** — reject characters unsafe for directory names.
+- **Proxy audit lock** — reduced Mutex scope for async SQLite writes.
+
+### Added
+- **A2A protocol server** — `GET /.well-known/agent-card.json` (daemon + per-agent), `POST /a2a/rpc` (JSON-RPC 2.0: `message/send`, `tasks/get`, `tasks/list`, `tasks/cancel`).
+- **Daemon control channel** — `POST /control/revoke` for forced agent revocation (PQ signature mandatory).
+- **IOTA anchoring** — real `IotaClient` submission (was stub). Self-transfer with Merkle root as proof.
+- **E2E lab** — `examples/run-lab.sh` (12 steps, 33 assertions), `examples/hello-agent/` template.
+- **A2A config** — `[a2a]` section in daemon.toml: `enabled`, `port`, `base_url`, `require_auth`.
+
+### Changed
+- Version bumped to 0.4.1 across all crates
+- Test suite expanded to **119 tests** (from 97)
+- Full security audit: 0 critical vulnerabilities, all High and Medium findings resolved
+- IOTA testnet wallet funded (10 IOTA)
+
 ## [0.4.0] — 2026-04-02
 
 ### Added
@@ -60,6 +89,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Security policy (`SECURITY.md`)
 - Commercial licensing guide (`COMMERCIAL.md`)
 
+[0.4.1]: https://github.com/grokingclaw/grokingclawid/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/grokingclaw/grokingclawid/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/grokingclaw/grokingclawid/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/grokingclaw/grokingclawid/releases/tag/v0.2.0

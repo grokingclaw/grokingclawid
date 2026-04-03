@@ -1,6 +1,6 @@
 [package]
 name = "grokingclawid-cli"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
 description = "GrokingClawID CLI - AI Agent Identity Management"
