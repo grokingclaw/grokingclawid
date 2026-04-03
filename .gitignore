@@ -25,6 +25,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# License file (contains activation tokens)
+license.json
+
 # Environment / secrets
 .env
 .env.*
@@ -35,3 +38,6 @@ Thumbs.db
 
 # Build artifacts
 *.dSYM/
+
+# Node modules (mcp-server)
+node_modules/

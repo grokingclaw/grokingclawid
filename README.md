@@ -5,6 +5,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-97%20passing-green.svg)](#tests)
+[![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)](CHANGELOG.md)
+[![CI](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml/badge.svg)](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml)
 
 GrokingClawID creates, manages, and verifies unforgeable cryptographic identities for AI agents. It's the foundation layer that authorization systems, governance platforms, and agent runtimes build on.
 
@@ -198,7 +200,13 @@ GrokingClawID was submitted to NIST NCCoE as a working reference implementation 
 
 [Apache 2.0](LICENSE) — free to use, modify, and distribute.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and PR process.
+
 ## Links
+
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
 - **Author:** Michael N Thornton, GrokingClaw Labs
