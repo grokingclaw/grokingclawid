@@ -176,6 +176,11 @@ impl Supervisor {
         }
     }
 
+    /// Get the agents directory path.
+    pub fn agents_dir(&self) -> &std::path::Path {
+        &self.agents_dir
+    }
+
     /// Initialize: scan agents_dir for existing agent.toml files,
     /// load their configs, set status to Stopped.
     pub async fn init(&self) -> Result<()> {

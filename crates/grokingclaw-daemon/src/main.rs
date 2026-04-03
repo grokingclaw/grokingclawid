@@ -114,6 +114,9 @@ enum Commands {
         #[command(subcommand)]
         action: UpdateAction,
     },
+
+    /// Show license status
+    License,
 }
 
 #[derive(Subcommand)]
@@ -331,6 +334,9 @@ async fn main() -> Result<()> {
         },
         Commands::Audit { name, last, verify } => {
             cmd_ipc("audit.query", serde_json::json!({"name": name, "last": last, "verify": verify}), &config).await
+        }
+        Commands::License => {
+            cmd_ipc("license.status", serde_json::json!({}), &config).await
         }
         Commands::Update { action } => match action {
             UpdateAction::Check => {
@@ -620,6 +626,7 @@ async fn cmd_ipc(
             "templates.inspect" => println!("{}", serde_json::to_string_pretty(result)?),
             "update.check" | "update.status" => print_update_status(result),
             "audit.query" => print_audit_entries(result),
+            "license.status" => print_license_status(result),
             _ => println!("{}", serde_json::to_string_pretty(result)?),
         }
     }
@@ -648,10 +655,57 @@ fn print_status(v: &serde_json::Value) {
         }
     }
 
+    if let Some(lic) = v.get("license") {
+        let tier = lic.get("tier").and_then(|t| t.as_str()).unwrap_or("Free");
+        let count = lic.get("agent_count").and_then(|a| a.as_u64()).unwrap_or(0);
+        let max = lic.get("max_agents").and_then(|m| m.as_u64());
+        match max {
+            Some(m) => println!("   License: {} (Agents: {}/{})", tier, count, m),
+            None => println!("   License: {} (Agents: {} unlimited)", tier, count),
+        }
+    }
+
     if let Some(agents) = v.get("agents").and_then(|a| a.as_array()) {
         if !agents.is_empty() {
             println!();
             print_agents_list(&serde_json::Value::Array(agents.clone()));
+        }
+    }
+}
+
+/// Pretty-print license status.
+fn print_license_status(v: &serde_json::Value) {
+    println!("🔑 License Status");
+    println!("   Tier:     {}", v.get("tier").and_then(|t| t.as_str()).unwrap_or("Free"));
+    println!("   Licensee: {}", v.get("licensee").and_then(|l| l.as_str()).unwrap_or("(free tier)"));
+
+    let agent_count = v.get("agent_count").and_then(|a| a.as_u64()).unwrap_or(0);
+    let max_agents = v.get("max_agents").and_then(|m| m.as_u64());
+    match max_agents {
+        Some(max) => println!("   Agents:   {}/{}", agent_count, max),
+        None => println!("   Agents:   {} (unlimited)", agent_count),
+    }
+
+    let max_mesh = v.get("max_mesh_nodes").and_then(|m| m.as_u64());
+    match max_mesh {
+        Some(max) => println!("   Mesh:     {}", max),
+        None => println!("   Mesh:     unlimited"),
+    }
+
+    let max_proxies = v.get("max_proxies").and_then(|m| m.as_u64());
+    match max_proxies {
+        Some(max) => println!("   Proxies:  {}", max),
+        None => println!("   Proxies:  unlimited"),
+    }
+
+    if let Some(features) = v.get("features").and_then(|f| f.as_array()) {
+        if features.is_empty() {
+            println!("   Features: (none — upgrade at https://grokingclaw.com)");
+        } else {
+            let names: Vec<&str> = features.iter()
+                .filter_map(|f| f.as_str())
+                .collect();
+            println!("   Features: {}", names.join(", "));
         }
     }
 }

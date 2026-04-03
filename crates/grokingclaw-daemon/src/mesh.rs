@@ -99,6 +99,7 @@ pub struct AuthResult {
 }
 
 /// Result of node registration.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeRegistration {
     pub node_id: String,
@@ -122,6 +123,7 @@ pub struct PingResult {
 /// Real implementation uses reqwest HTTP to coordination server.
 /// Mock implementation for testing without infrastructure.
 #[async_trait]
+#[allow(dead_code)]
 pub trait MeshTransport: Send + Sync {
     /// Authenticate with the coordination server using ClawID challenge-response.
     async fn authenticate(
@@ -623,6 +625,7 @@ impl MeshClient {
     }
 
     /// Deregister an agent from the mesh.
+    #[allow(dead_code)]
     pub async fn deregister_agent(&self, agent_id: &str) -> Result<()> {
         if !self.is_connected().await {
             return Ok(());

@@ -73,6 +73,7 @@ pub struct BirthResourceConfig {
 }
 
 /// Validation request from Naja to Morpheus (for reference — Naja creates this).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationRequest {
     /// Original birth request.
@@ -86,6 +87,7 @@ pub struct ValidationRequest {
 }
 
 /// Validation response from Morpheus to Naja.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationResponse {
     /// Whether the birth is approved.

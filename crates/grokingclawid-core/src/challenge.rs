@@ -20,7 +20,7 @@
 //! This prevents session smuggling because every A2A interaction requires
 //! cryptographic proof of identity BEFORE any instructions are accepted.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::{DateTime, Duration, Utc};
 use ed25519_dalek::Signer;
@@ -245,7 +245,7 @@ pub fn verify_response(
     });
 
     // 5. ML-DSA-65 signature (if hybrid)
-    let pq_ok = if card.crypto_scheme == CryptoScheme::Hybrid {
+    let _pq_ok = if card.crypto_scheme == CryptoScheme::Hybrid {
         match (&response.pq_signature, &card.pq_public_key) {
             (Some(pq_sig), Some(pq_pub)) => {
                 let valid = crypto::mldsa_verify(pq_pub, &sign_bytes, pq_sig)
@@ -341,7 +341,6 @@ mod tests {
     use super::*;
     use crate::crypto::{
         encode_mldsa_public_key, encode_public_key, generate_hybrid_keypair, generate_keypair,
-        sign as ed_sign,
     };
 
     fn make_test_card(
@@ -352,7 +351,7 @@ mod tests {
         pq_pub: Option<&[u8]>,
     ) -> AgentCard {
         let now = Utc::now();
-        let card_bytes = serde_json::to_vec(&serde_json::json!({
+        let _card_bytes = serde_json::to_vec(&serde_json::json!({
             "name": name, "scopes": scopes
         }))
         .unwrap();
@@ -458,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_challenge_rejects_wrong_key() {
-        let (sk1, vk1) = generate_keypair();
+        let (sk1, _vk1) = generate_keypair();
         let (_sk2, vk2) = generate_keypair();
 
         // Card has vk2's public key, but we sign with sk1

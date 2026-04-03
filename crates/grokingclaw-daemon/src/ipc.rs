@@ -14,6 +14,7 @@ use tokio::net::{UnixListener, UnixStream};
 use crate::birth::BirthParams;
 use crate::daemon::DaemonState;
 use crate::mesh::MeshState;
+use grokingclawid_core::license;
 
 /// JSON-RPC 2.0 Request.
 #[derive(Debug, Deserialize)]
@@ -176,6 +177,15 @@ async fn dispatch(state: &DaemonState, request: JsonRpcRequest) -> JsonRpcRespon
                 }
             };
 
+            // License info
+            let lic = license::load_license();
+            let agent_count_on_disk = license::count_agents(state.supervisor.agents_dir());
+            let license_status = serde_json::json!({
+                "tier": lic.tier.to_string(),
+                "agent_count": agent_count_on_disk,
+                "max_agents": lic.limits.max_agents,
+            });
+
             let info = serde_json::json!({
                 "daemon": "running",
                 "version": env!("CARGO_PKG_VERSION"),
@@ -184,6 +194,7 @@ async fn dispatch(state: &DaemonState, request: JsonRpcRequest) -> JsonRpcRespon
                 "uptime_seconds": state.started_at.elapsed().as_secs(),
                 "mesh": mesh_status,
                 "anchor": anchor_status,
+                "license": license_status,
             });
             JsonRpcResponse::success(id, info)
         }
@@ -471,11 +482,120 @@ async fn dispatch(state: &DaemonState, request: JsonRpcRequest) -> JsonRpcRespon
             }
         }
 
+        // ─── License ────────────────────────────────────────────────
+        "license.status" => {
+            let lic = license::load_license();
+            let agents_dir = state.supervisor.agents_dir();
+            let agent_count = license::count_agents(agents_dir);
+            let features: Vec<String> = lic.limits.features.iter().map(|f| f.to_string()).collect();
+            JsonRpcResponse::success(id, serde_json::json!({
+                "tier": lic.tier.to_string(),
+                "licensee": lic.licensee_email.as_deref().unwrap_or("(free tier)"),
+                "agent_count": agent_count,
+                "max_agents": lic.limits.max_agents,
+                "max_mesh_nodes": lic.limits.max_mesh_nodes,
+                "max_proxies": lic.limits.max_proxy_agents,
+                "features": features,
+            }))
+        }
+
         // ─── Unknown ───────────────────────────────────────────────
         _ => JsonRpcResponse::error(
             id,
             -32601,
             format!("Method not found: {}", request.method),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_json_rpc_request_parsing() {
+        let json = r#"{"jsonrpc":"2.0","id":1,"method":"status","params":{}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "status");
+        assert_eq!(req.id, Some(serde_json::json!(1)));
+    }
+
+    #[test]
+    fn test_json_rpc_request_no_id() {
+        let json = r#"{"jsonrpc":"2.0","method":"shutdown","params":{}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "shutdown");
+        assert!(req.id.is_none());
+    }
+
+    #[test]
+    fn test_json_rpc_request_no_params() {
+        let json = r#"{"jsonrpc":"2.0","id":42,"method":"agents.list"}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "agents.list");
+        assert_eq!(req.params, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_json_rpc_response_success() {
+        let resp = JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"status": "running"}),
+        );
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, Some(serde_json::json!(1)));
+        assert!(resp.result.is_some());
+        assert!(resp.error.is_none());
+
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"result\""));
+        assert!(!json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_json_rpc_response_error() {
+        let resp = JsonRpcResponse::error(
+            Some(serde_json::json!(2)),
+            -32601,
+            "Method not found".to_string(),
+        );
+        assert!(resp.result.is_none());
+        let err = resp.error.as_ref().unwrap();
+        assert_eq!(err.code, -32601);
+        assert_eq!(err.message, "Method not found");
+
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(!json.contains("\"result\""));
+        assert!(json.contains("\"error\""));
+    }
+
+    #[test]
+    fn test_json_rpc_response_roundtrip() {
+        let resp = JsonRpcResponse::success(
+            Some(serde_json::json!(99)),
+            serde_json::json!({"daemon": "running", "version": "0.4.0"}),
+        );
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["id"], 99);
+        assert_eq!(parsed["result"]["daemon"], "running");
+        assert_eq!(parsed["result"]["version"], "0.4.0");
+    }
+
+    #[test]
+    fn test_json_rpc_invalid_json() {
+        let json = r#"not valid json"#;
+        let result = serde_json::from_str::<JsonRpcRequest>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_rpc_request_with_complex_params() {
+        let json = r#"{"jsonrpc":"2.0","id":5,"method":"birth","params":{"template":"swe-agent","name":"test-agent","scope":{"allowed_domains":["api.openai.com"]}}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "birth");
+        assert_eq!(req.params["template"], "swe-agent");
+        assert_eq!(req.params["name"], "test-agent");
     }
 }

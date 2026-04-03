@@ -402,7 +402,7 @@ fn deny_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
     *resp.status_mut() = StatusCode::FORBIDDEN;
     resp.headers_mut().insert(
         hyper::header::CONTENT_TYPE,
-        "application/json".parse().unwrap(),
+        hyper::header::HeaderValue::from_static("application/json"),
     );
     resp
 }
@@ -418,7 +418,7 @@ fn rate_limit_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
     *resp.status_mut() = StatusCode::TOO_MANY_REQUESTS;
     resp.headers_mut().insert(
         hyper::header::CONTENT_TYPE,
-        "application/json".parse().unwrap(),
+        hyper::header::HeaderValue::from_static("application/json"),
     );
     resp
 }
@@ -431,7 +431,7 @@ fn error_response(msg: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
     *resp.status_mut() = StatusCode::BAD_GATEWAY;
     resp.headers_mut().insert(
         hyper::header::CONTENT_TYPE,
-        "application/json".parse().unwrap(),
+        hyper::header::HeaderValue::from_static("application/json"),
     );
     resp
 }
@@ -485,7 +485,7 @@ mod tests {
         )
         .unwrap();
 
-        let (port, handle) = server.start().await.unwrap();
+        let (_port, handle) = server.start().await.unwrap();
 
         // Try to request a blocked domain through the proxy
         // Clean up

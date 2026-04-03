@@ -27,8 +27,6 @@ use ed25519_dalek::{Signer, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::crypto;
-use crate::models::HybridSignature;
-
 // ─── Signature Components ───────────────────────────────────────────────
 
 /// HTTP message components that can be included in the signature base.

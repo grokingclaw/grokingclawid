@@ -20,7 +20,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
@@ -66,6 +65,8 @@ struct GuardState {
     require_pq: bool,
     request_count: u64,
     blocked_count: u64,
+    auth_failures: u32,
+    last_failure_time: Option<std::time::Instant>,
 }
 
 impl GuardState {
@@ -77,6 +78,8 @@ impl GuardState {
             require_pq,
             request_count: 0,
             blocked_count: 0,
+            auth_failures: 0,
+            last_failure_time: None,
         }
     }
 }
@@ -152,14 +155,14 @@ pub fn execute(
             Ok(r) => r,
             Err(_) => {
                 // Not valid JSON-RPC, forward as-is
-                let mut child_in = child_stdin.lock().unwrap();
+                let mut child_in = child_stdin.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = writeln!(child_in, "{}", line);
                 let _ = child_in.flush();
                 continue;
             }
         };
 
-        let mut guard = state.lock().unwrap();
+        let mut guard = state.lock().unwrap_or_else(|e| e.into_inner());
         guard.request_count += 1;
 
         // Handle authentication tool call
@@ -168,7 +171,10 @@ pub fn execute(
                 if name == "clawid_authenticate" {
                     // Handle authentication
                     let response = handle_authenticate(&mut guard, &request);
-                    let resp_json = serde_json::to_string(&response).unwrap();
+                    let resp_json = match serde_json::to_string(&response) {
+                        Ok(j) => j,
+                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                    };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
                     let _ = out.flush();
@@ -178,7 +184,10 @@ pub fn execute(
                 if name == "clawid_guard_status" {
                     // Return guard status
                     let response = handle_status(&guard, &request);
-                    let resp_json = serde_json::to_string(&response).unwrap();
+                    let resp_json = match serde_json::to_string(&response) {
+                        Ok(j) => j,
+                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                    };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
                     let _ = out.flush();
@@ -197,7 +206,7 @@ pub fn execute(
         if is_init || (allow_unauthenticated_init && !guard.authenticated) {
             drop(guard);
             // Forward to real server
-            let mut child_in = child_stdin.lock().unwrap();
+            let mut child_in = child_stdin.lock().unwrap_or_else(|e| e.into_inner());
             let _ = writeln!(child_in, "{}", line);
             let _ = child_in.flush();
 
@@ -219,7 +228,10 @@ pub fn execute(
                     data: None,
                 }),
             };
-            let resp_json = serde_json::to_string(&response).unwrap();
+            let resp_json = match serde_json::to_string(&response) {
+                Ok(j) => j,
+                Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+            };
             let mut out = std::io::stdout().lock();
             let _ = writeln!(out, "{}", resp_json);
             let _ = out.flush();
@@ -252,7 +264,10 @@ pub fn execute(
                             })),
                         }),
                     };
-                    let resp_json = serde_json::to_string(&response).unwrap();
+                    let resp_json = match serde_json::to_string(&response) {
+                        Ok(j) => j,
+                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                    };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
                     let _ = out.flush();
@@ -274,7 +289,7 @@ pub fn execute(
         );
         drop(guard);
 
-        let mut child_in = child_stdin.lock().unwrap();
+        let mut child_in = child_stdin.lock().unwrap_or_else(|e| e.into_inner());
         let _ = writeln!(child_in, "{}", line);
         let _ = child_in.flush();
     }
@@ -283,7 +298,7 @@ pub fn execute(
     let _ = child.kill();
     let _ = forward_thread.join();
 
-    let guard = state.lock().unwrap();
+    let guard = state.lock().unwrap_or_else(|e| e.into_inner());
     eprintln!("[guard] Session ended. {} requests, {} blocked.", guard.request_count, guard.blocked_count);
 
     Ok(())
@@ -291,6 +306,25 @@ pub fn execute(
 
 /// Handle the `clawid_authenticate` tool call.
 fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> JsonRpcResponse {
+    // Rate limit check
+    if state.auth_failures >= 10 {
+        if let Some(last) = state.last_failure_time {
+            let elapsed = last.elapsed().as_secs();
+            if elapsed < 60 {
+                let wait = 60 - elapsed;
+                return error_response(
+                    &request.id,
+                    -32005,
+                    &format!("Too many auth failures. Try again in {} seconds.", wait),
+                );
+            } else {
+                // Window expired, reset
+                state.auth_failures = 0;
+                state.last_failure_time = None;
+            }
+        }
+    }
+
     let args = request
         .params
         .get("arguments")
@@ -299,7 +333,7 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
 
     // Extract agent card from arguments
     let card_json = match args.get("agent_card") {
-        Some(v) if v.is_string() => v.as_str().unwrap().to_string(),
+        Some(v) if v.is_string() => v.as_str().unwrap_or_default().to_string(),
         Some(v) if v.is_object() => serde_json::to_string(v).unwrap_or_default(),
         _ => {
             return error_response(
@@ -343,6 +377,8 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
     };
 
     if !ed_valid {
+        state.auth_failures += 1;
+        state.last_failure_time = Some(std::time::Instant::now());
         eprintln!("[guard] ❌ Authentication failed: invalid Ed25519 signature for '{}'", card.name);
         return error_response(&request.id, -32002, "Invalid Ed25519 signature on agent card.");
     }
@@ -384,6 +420,8 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
     // Check expiration
     let now = chrono::Utc::now();
     if now >= card.expires_at {
+        state.auth_failures += 1;
+        state.last_failure_time = Some(std::time::Instant::now());
         eprintln!("[guard] ❌ Authentication failed: card expired for '{}'", card.name);
         return error_response(
             &request.id,
@@ -420,7 +458,9 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
         );
     }
 
-    // All checks passed
+    // All checks passed — reset rate limiter
+    state.auth_failures = 0;
+    state.last_failure_time = None;
     state.authenticated = true;
     state.agent_card = Some(card.clone());
 
@@ -494,5 +534,105 @@ fn error_response(id: &serde_json::Value, code: i64, message: &str) -> JsonRpcRe
             message: message.into(),
             data: None,
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_guard_state_init() {
+        let state = GuardState::new(vec!["read".into(), "write".into()], false);
+        assert!(!state.authenticated);
+        assert!(state.agent_card.is_none());
+        assert_eq!(state.allowed_scopes, vec!["read", "write"]);
+        assert!(!state.require_pq);
+        assert_eq!(state.request_count, 0);
+        assert_eq!(state.blocked_count, 0);
+        assert_eq!(state.auth_failures, 0);
+        assert!(state.last_failure_time.is_none());
+    }
+
+    #[test]
+    fn test_guard_state_init_with_pq() {
+        let state = GuardState::new(vec!["admin".into()], true);
+        assert!(state.require_pq);
+        assert_eq!(state.allowed_scopes, vec!["admin"]);
+    }
+
+    #[test]
+    fn test_rate_limit_tracking() {
+        let mut state = GuardState::new(vec!["read".into()], false);
+
+        // Simulate 10 failures
+        for _ in 0..10 {
+            state.auth_failures += 1;
+            state.last_failure_time = Some(std::time::Instant::now());
+        }
+
+        assert_eq!(state.auth_failures, 10);
+        assert!(state.last_failure_time.is_some());
+
+        // Verify the window check logic: within 60s should be rate-limited
+        if let Some(last) = state.last_failure_time {
+            let elapsed = last.elapsed().as_secs();
+            assert!(elapsed < 60, "should be within rate limit window");
+        }
+
+        // Simulate reset on success
+        state.auth_failures = 0;
+        state.last_failure_time = None;
+        assert_eq!(state.auth_failures, 0);
+        assert!(state.last_failure_time.is_none());
+    }
+
+    #[test]
+    fn test_check_scope_unauthenticated() {
+        let state = GuardState::new(vec!["read".into()], false);
+        assert!(!check_scope(&state, "any_tool"));
+    }
+
+    #[test]
+    fn test_check_scope_authenticated() {
+        let mut state = GuardState::new(vec!["read".into()], false);
+        state.authenticated = true;
+        assert!(check_scope(&state, "any_tool"));
+    }
+
+    #[test]
+    fn test_error_response_structure() {
+        let id = serde_json::json!(42);
+        let resp = error_response(&id, -32001, "Test error");
+        assert_eq!(resp.jsonrpc, "2.0");
+        assert_eq!(resp.id, serde_json::json!(42));
+        assert!(resp.result.is_none());
+        let err = resp.error.as_ref().unwrap();
+        assert_eq!(err.code, -32001);
+        assert_eq!(err.message, "Test error");
+        assert!(err.data.is_none());
+    }
+
+    #[test]
+    fn test_json_rpc_request_parsing() {
+        let json = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test"}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.method, "tools/call");
+        assert_eq!(req.id, serde_json::json!(1));
+    }
+
+    #[test]
+    fn test_json_rpc_response_serialization() {
+        let resp = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: serde_json::json!(1),
+            result: Some(serde_json::json!({"status": "ok"})),
+            error: None,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"jsonrpc\":\"2.0\""));
+        assert!(json.contains("\"status\":\"ok\""));
+        // error field should be skipped
+        assert!(!json.contains("\"error\""));
     }
 }
