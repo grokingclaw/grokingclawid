@@ -127,15 +127,27 @@ pub fn create_challenge(
 ///
 /// The canonical form is deterministic — same challenge always
 /// produces the same bytes regardless of serialization order.
+/// Fields are separated by \x00 to prevent boundary-shift collisions.
 pub fn challenge_to_sign_bytes(challenge: &Challenge) -> Vec<u8> {
-    // Canonical: id || nonce || issuer || issued_at_unix || expires_at_unix
+    // Canonical: id \0 nonce \0 issuer \0 issued_at_unix \0 expires_at_unix \0 min_crypto \0 scopes...
     let mut data = Vec::new();
     data.extend_from_slice(challenge.id.as_bytes());
+    data.push(0x00);
     data.extend_from_slice(challenge.nonce.as_bytes());
+    data.push(0x00);
     data.extend_from_slice(challenge.issuer.as_bytes());
+    data.push(0x00);
     data.extend_from_slice(&challenge.issued_at.timestamp().to_le_bytes());
+    data.push(0x00);
     data.extend_from_slice(&challenge.expires_at.timestamp().to_le_bytes());
-    for scope in &challenge.required_scopes {
+    data.push(0x00);
+    // Include min_crypto level (or empty if unset)
+    if let Some(ref mc) = challenge.min_crypto {
+        data.extend_from_slice(mc.as_bytes());
+    }
+    data.push(0x00);
+    for (i, scope) in challenge.required_scopes.iter().enumerate() {
+        if i > 0 { data.push(0x00); }
         data.extend_from_slice(scope.as_bytes());
     }
     data

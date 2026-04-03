@@ -236,13 +236,21 @@ pub fn check_already_running(path: &std::path::Path) -> Result<Option<u32>> {
     let pid: u32 = pid_str.trim().parse()
         .context("Invalid PID in file")?;
 
-    // Check if process is alive
+    // Check if process is alive (signal 0 = existence check)
     #[cfg(unix)]
     {
-        let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
-        if alive {
+        // SAFETY: libc::kill with signal 0 is a standard POSIX process existence check.
+        // Returns 0 if process exists and we have permission, or -1 with errno.
+        let ret = unsafe { libc::kill(pid as i32, 0) };
+        if ret == 0 {
             return Ok(Some(pid));
         }
+        // EPERM means process exists but we lack permission — still alive
+        let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+        if errno == libc::EPERM {
+            return Ok(Some(pid));
+        }
+        // ESRCH or other error — process is gone
     }
 
     // Stale PID file

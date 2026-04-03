@@ -4,7 +4,7 @@
 //! delegation chain. Operates at the domain level for HTTPS (CONNECT)
 //! and at the domain + path level for HTTP.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use url::Url;
 
 /// Scope enforcement configuration for one agent.
@@ -14,10 +14,8 @@ pub struct ScopeConfig {
     pub allowed_domains: HashSet<String>,
     /// Max requests per minute. 0 = unlimited.
     pub max_requests_per_minute: u32,
-    /// Request counter for rate limiting.
-    request_count: u32,
-    /// Window start for rate limiting.
-    window_start: std::time::Instant,
+    /// Sliding window: timestamps of recent requests.
+    request_timestamps: VecDeque<std::time::Instant>,
 }
 
 /// Result of a scope check.
@@ -37,8 +35,7 @@ impl ScopeConfig {
         Self {
             allowed_domains: allowed_domains.into_iter().collect(),
             max_requests_per_minute,
-            request_count: 0,
-            window_start: std::time::Instant::now(),
+            request_timestamps: VecDeque::new(),
         }
     }
 
@@ -47,28 +44,39 @@ impl ScopeConfig {
         Self {
             allowed_domains: HashSet::new(),
             max_requests_per_minute: 0,
-            request_count: 0,
-            window_start: std::time::Instant::now(),
+            request_timestamps: VecDeque::new(),
         }
+    }
+
+    /// Sliding-window rate limit check. Returns true if request is allowed.
+    fn check_rate_limit(&mut self) -> Option<u64> {
+        if self.max_requests_per_minute == 0 {
+            return None; // Unlimited
+        }
+        let now = std::time::Instant::now();
+        let window = std::time::Duration::from_secs(60);
+        // Evict timestamps older than 60s
+        while self.request_timestamps.front().map_or(false, |t| now.duration_since(*t) >= window) {
+            self.request_timestamps.pop_front();
+        }
+        if self.request_timestamps.len() as u32 >= self.max_requests_per_minute {
+            // Estimate when the oldest will expire
+            let oldest = self.request_timestamps.front().unwrap();
+            let wait = window.saturating_sub(now.duration_since(*oldest));
+            return Some(wait.as_secs().max(1));
+        }
+        self.request_timestamps.push_back(now);
+        None
     }
 
     /// Check if a request to the given URL is allowed.
     pub fn check_url(&mut self, url: &str) -> ScopeDecision {
-        // Rate limit check
-        if self.max_requests_per_minute > 0 {
-            let elapsed = self.window_start.elapsed();
-            if elapsed.as_secs() >= 60 {
-                // Reset window
-                self.request_count = 0;
-                self.window_start = std::time::Instant::now();
-            }
-            if self.request_count >= self.max_requests_per_minute {
-                return ScopeDecision::DenyRateLimit {
-                    limit: self.max_requests_per_minute,
-                    window_seconds: 60 - elapsed.as_secs(),
-                };
-            }
-            self.request_count += 1;
+        // Sliding-window rate limit check
+        if let Some(wait_secs) = self.check_rate_limit() {
+            return ScopeDecision::DenyRateLimit {
+                limit: self.max_requests_per_minute,
+                window_seconds: wait_secs,
+            };
         }
 
         // Domain check
@@ -104,20 +112,12 @@ impl ScopeConfig {
         // CONNECT targets are "host:port"
         let host = host_port.split(':').next().unwrap_or(host_port);
 
-        // Rate limit check (same as URL check)
-        if self.max_requests_per_minute > 0 {
-            let elapsed = self.window_start.elapsed();
-            if elapsed.as_secs() >= 60 {
-                self.request_count = 0;
-                self.window_start = std::time::Instant::now();
-            }
-            if self.request_count >= self.max_requests_per_minute {
-                return ScopeDecision::DenyRateLimit {
-                    limit: self.max_requests_per_minute,
-                    window_seconds: 60 - elapsed.as_secs(),
-                };
-            }
-            self.request_count += 1;
+        // Sliding-window rate limit check
+        if let Some(wait_secs) = self.check_rate_limit() {
+            return ScopeDecision::DenyRateLimit {
+                limit: self.max_requests_per_minute,
+                window_seconds: wait_secs,
+            };
         }
 
         if self.allowed_domains.is_empty() {

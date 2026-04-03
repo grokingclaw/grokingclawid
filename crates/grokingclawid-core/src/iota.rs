@@ -37,10 +37,11 @@ pub const DEVNET_FAUCET: &str = "https://faucet.devnet.iota.cafe/gas";
 #[cfg(feature = "wallet")]
 pub fn derive_iota_address(public_key_bytes: &[u8; 32]) -> String {
     use std::io::Write;
-    // For Ed25519 (flag 0x00), IOTA hashes just the pubkey (no flag prefix)
-    // per the exchange integration docs: "for flag 0x00 it's a hash of pubkey"
+    // IOTA Rebased: Ed25519 address = BLAKE2b-256(flag || pubkey)
+    // Flag byte 0x00 = Ed25519 scheme identifier, prepended before hashing.
     let mut hasher = Blake2bVar::new(32)
         .expect("32 bytes is a valid Blake2b output size");
+    hasher.write_all(&[0x00]).expect("write Ed25519 flag byte");
     hasher.write_all(public_key_bytes).expect("write to hasher");
     let mut hash = [0u8; 32];
     hasher.finalize_variable(&mut hash).expect("finalize Blake2b");

@@ -519,16 +519,13 @@ async fn birth_local(
         spiffe_id: None,
     };
 
-    // Self-sign the card
-    let card_bytes = serde_json::to_vec(&serde_json::json!({
-        "id": card.id,
-        "name": card.name,
-        "owner": card.owner,
-        "public_key": card.public_key,
-        "issued_at": card.issued_at.to_rfc3339(),
-        "expires_at": card.expires_at.to_rfc3339(),
-    }))?;
-    card.signature = grokingclawid_core::crypto::sign(&signing_key, &card_bytes);
+    // Self-sign the card using canonical JSON (all fields, sorted keys)
+    let mut card_for_signing = card.clone();
+    card_for_signing.signature = String::new();
+    card_for_signing.pq_signature = None;
+    let card_value = serde_json::to_value(&card_for_signing)?;
+    let canonical = canonical_json_bytes(&card_value);
+    card.signature = grokingclawid_core::crypto::sign(&signing_key, &canonical);
 
     std::fs::write(
         agent_dir.join("identity").join("agent.card.json"),
@@ -706,5 +703,29 @@ mod tests {
         let parsed: BirthRequest = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.request_id, "req-001");
         assert_eq!(parsed.agent_name, "my-agent");
+    }
+}
+
+/// Produce canonical JSON bytes: sorted keys at every level, no extra whitespace.
+fn canonical_json_bytes(value: &serde_json::Value) -> Vec<u8> {
+    canonical_json_string(value).into_bytes()
+}
+
+fn canonical_json_string(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<_> = map.iter().collect();
+            entries.sort_by_key(|(k, _)| *k);
+            let inner: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json_string(v)))
+                .collect();
+            format!("{{{}}}", inner.join(","))
+        }
+        serde_json::Value::Array(arr) => {
+            let inner: Vec<String> = arr.iter().map(canonical_json_string).collect();
+            format!("[{}]", inner.join(","))
+        }
+        _ => serde_json::to_string(value).unwrap(),
     }
 }

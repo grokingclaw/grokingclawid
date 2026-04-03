@@ -221,11 +221,37 @@ fn build_card(
 
 /// Create the canonical signing payload for an agent card.
 /// Signature fields are zeroed for deterministic signing.
+/// Uses sorted keys for canonical JSON — field order is deterministic
+/// regardless of HashMap iteration or struct field ordering.
 pub fn card_signing_payload(card: &AgentCard) -> Result<String> {
     let mut card_for_signing = card.clone();
     card_for_signing.signature = String::new();
     card_for_signing.pq_signature = None;
-    serde_json::to_string(&card_for_signing).context("Failed to serialize card for signing")
+    // Serialize to Value first, then use sorted map output for canonical form
+    let value = serde_json::to_value(&card_for_signing)
+        .context("Failed to serialize card to JSON value")?;
+    let canonical = canonical_json(&value);
+    Ok(canonical)
+}
+
+/// Produce canonical JSON: sorted keys at every level, no extra whitespace.
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<_> = map.iter().collect();
+            entries.sort_by_key(|(k, _)| *k);
+            let inner: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json(v)))
+                .collect();
+            format!("{{{}}}", inner.join(","))
+        }
+        serde_json::Value::Array(arr) => {
+            let inner: Vec<String> = arr.iter().map(canonical_json).collect();
+            format!("[{}]", inner.join(","))
+        }
+        _ => serde_json::to_string(value).unwrap(),
+    }
 }
 
 #[cfg(test)]

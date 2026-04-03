@@ -384,9 +384,26 @@ impl Supervisor {
         agent.proxy_port = None;
 
         if let Some(ref mut child) = agent.child {
-            // Send SIGTERM first
-            tracing::info!(agent = %name, "Sending SIGTERM");
-            let _ = child.kill().await;
+            if let Some(pid) = child.id() {
+                // Send SIGTERM for graceful shutdown
+                tracing::info!(agent = %name, pid = pid, "Sending SIGTERM");
+                #[cfg(unix)]
+                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+
+                // Wait up to 10s for graceful exit
+                let graceful = tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    child.wait(),
+                ).await;
+
+                if graceful.is_err() {
+                    // Timeout — force kill
+                    tracing::warn!(agent = %name, "SIGTERM timeout, sending SIGKILL");
+                    let _ = child.kill().await;
+                }
+            } else {
+                let _ = child.kill().await;
+            }
             agent.child = None;
         }
 
@@ -475,7 +492,19 @@ impl Supervisor {
                 if Utc::now() > expires_at {
                     tracing::warn!(agent = %name, "Delegation expired, stopping agent");
                     if let Some(ref mut child) = agent.child {
-                        let _ = child.kill().await;
+                        if let Some(pid) = child.id() {
+                            #[cfg(unix)]
+                            unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                            let graceful = tokio::time::timeout(
+                                std::time::Duration::from_secs(5),
+                                child.wait(),
+                            ).await;
+                            if graceful.is_err() {
+                                let _ = child.kill().await;
+                            }
+                        } else {
+                            let _ = child.kill().await;
+                        }
                     }
                     agent.status = AgentStatus::Stopped;
                     agent.child = None;
