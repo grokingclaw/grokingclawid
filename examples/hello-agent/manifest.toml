@@ -1,0 +1,41 @@
+# Hello Agent — minimal GrokingClawID template for lab testing.
+#
+# This agent prints status every 10 seconds, responds to health checks,
+# and exposes its proxy port. Use it to verify the full daemon pipeline.
+
+[template]
+name = "hello-agent"
+version = "1.0.0"
+description = "Minimal lab agent — heartbeat loop with health endpoint"
+author = "GrokingClaw Labs"
+license = "Apache-2.0"
+tags = ["lab", "demo", "minimal"]
+
+[requirements]
+min_memory_mb = 64
+min_disk_gb = 1
+binaries = ["bash", "curl"]
+os = ["linux", "darwin"]
+
+[install]
+script = "install.sh"
+files = ["agent.py"]
+
+[run]
+script = "run.sh"
+workdir = "data"
+restart_on_crash = true
+max_restarts = 5
+
+[run.env]
+HELLO_INTERVAL = "10"
+
+[health]
+script = "health.sh"
+interval_seconds = 15
+unhealthy_threshold = 3
+
+[scope]
+allowed_domains = ["localhost", "127.0.0.1"]
+allowed_scopes = ["health", "status"]
+ttl_seconds = 86400

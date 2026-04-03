@@ -494,15 +494,36 @@ async fn birth_local(
     std::fs::write(agent_dir.join("identity").join("agent.pem"), &pem)?;
 
     let pub_key_b64 = grokingclawid_core::crypto::encode_public_key(&verifying_key);
-    let card = serde_json::json!({
-        "id": agent_id,
-        "name": params.name,
-        "public_key": pub_key_b64,
-        "crypto_scheme": "ed25519",
-        "issued_at": now.to_rfc3339(),
-        "issuer": "local",
-        "note": "Local birth — no Naja/Morpheus validation",
-    });
+
+    // Build a proper AgentCard (self-signed for local birth)
+    let mut card = grokingclawid_core::models::AgentCard {
+        id: agent_id,
+        name: params.name.clone(),
+        owner: "local".to_string(),
+        scopes: params.allowed_scopes.clone(),
+        public_key: pub_key_b64.clone(),
+        pq_public_key: None,
+        signature: String::new(), // placeholder — signed below
+        pq_signature: None,
+        crypto_scheme: grokingclawid_core::models::CryptoScheme::Ed25519,
+        issued_at: now,
+        expires_at,
+        agent_type: grokingclawid_core::models::AgentType::Instance,
+        parent_id: None,
+        spiffe_id: None,
+    };
+
+    // Self-sign the card
+    let card_bytes = serde_json::to_vec(&serde_json::json!({
+        "id": card.id,
+        "name": card.name,
+        "owner": card.owner,
+        "public_key": card.public_key,
+        "issued_at": card.issued_at.to_rfc3339(),
+        "expires_at": card.expires_at.to_rfc3339(),
+    }))?;
+    card.signature = grokingclawid_core::crypto::sign(&signing_key, &card_bytes);
+
     std::fs::write(
         agent_dir.join("identity").join("agent.card.json"),
         serde_json::to_string_pretty(&card)?,
