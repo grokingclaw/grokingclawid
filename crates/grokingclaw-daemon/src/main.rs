@@ -3,6 +3,7 @@
 //! The daemon manages agent lifecycles: birth, run, monitor, stop.
 //! CLI communicates via Unix domain socket (JSON-RPC 2.0).
 
+mod a2a;
 mod anchor;
 mod birth;
 mod config;
@@ -516,9 +517,34 @@ async fn cmd_start(
         }
     });
 
+    // Start A2A server (agent-to-agent protocol)
+    if config.a2a.enabled {
+        let a2a_bind = std::net::SocketAddr::from(([0, 0, 0, 0], config.a2a.port));
+        let a2a_server = Arc::new(a2a::A2aServer::new(
+            Arc::clone(&state),
+            a2a_bind,
+            config.a2a.base_url.clone(),
+        ));
+        // Load daemon identity card for A2A discovery
+        if let Err(e) = a2a_server.load_daemon_card().await {
+            tracing::warn!(error = %e, "Failed to load daemon A2A card (non-fatal)");
+        }
+        match a2a_server.start().await {
+            Ok(_handle) => {
+                tracing::info!(port = config.a2a.port, "A2A server started");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to start A2A server");
+            }
+        }
+    }
+
     println!("\u{1f980} GrokingClaw daemon started");
     println!("   Socket: {}", socket_path.display());
     println!("   PID:    {}", std::process::id());
+    if config.a2a.enabled {
+        println!("   A2A:    http://0.0.0.0:{}", config.a2a.port);
+    }
     if config.mesh.enabled {
         println!("   Mesh:   {}", config.mesh.coordination_server);
     }

@@ -27,6 +27,8 @@ pub struct DaemonConfig {
     pub updates: UpdatesSection,
     #[serde(default)]
     pub registry: RegistrySection,
+    #[serde(default)]
+    pub a2a: A2aSection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +104,36 @@ pub struct RegistrySection {
     /// Remote template registry URL.
     #[serde(default)]
     pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A2aSection {
+    /// Enable the A2A HTTP server.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Port to bind the A2A server on.
+    #[serde(default = "default_a2a_port")]
+    pub port: u16,
+    /// Base URL for agent card discovery (external-facing).
+    #[serde(default = "default_a2a_base_url")]
+    pub base_url: String,
+}
+
+fn default_a2a_port() -> u16 {
+    9420
+}
+fn default_a2a_base_url() -> String {
+    "http://localhost:9420".to_string()
+}
+
+impl Default for A2aSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: default_a2a_port(),
+            base_url: default_a2a_base_url(),
+        }
+    }
 }
 
 // Default value functions
@@ -210,6 +242,7 @@ impl Default for DaemonConfig {
             anchoring: AnchoringSection::default(),
             updates: UpdatesSection::default(),
             registry: RegistrySection::default(),
+            a2a: A2aSection::default(),
         }
     }
 }
