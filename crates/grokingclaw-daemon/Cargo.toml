@@ -2,7 +2,7 @@
 name = "grokingclaw-daemon"
 version = "0.4.1"
 edition = "2021"
-authors = ["GrokingClaw Labs <huynguyenusa@icloud.com>"]
+authors = ["GrokingClaw Labs <michaelnvgt@icloud.com>"]
 description = "GrokingClaw Daemon — AI Agent Host"
 license = "Apache-2.0"
 

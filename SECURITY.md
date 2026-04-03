@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-Email **huynguyenusa@icloud.com** with:
+Email **michaelnvgt@icloud.com** with:
 - Description of the vulnerability
 - Steps to reproduce
 - Impact assessment
