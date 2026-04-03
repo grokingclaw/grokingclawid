@@ -128,6 +128,14 @@ pub fn execute(
     fs::write(&key_out, &new_key_pem)
         .with_context(|| format!("Failed to write {}", key_out.display()))?;
 
+    // Restrict key file permissions to owner-only (0o600)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&key_out, fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to set permissions on {}", key_out.display()))?;
+    }
+
     // Record rotation in audit log using OLD key (proves the rotation was authorized)
     let conn = audit::open_db()?;
     audit::record_entry(

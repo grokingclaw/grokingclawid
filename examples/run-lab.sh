@@ -98,6 +98,7 @@ enabled = false
 enabled = true
 port = $A2A_PORT
 base_url = "http://127.0.0.1:$A2A_PORT"
+require_auth = false  # Lab mode — no signed requests
 EOF
 
 # ═══════════════════════════════════════════════════════════════════════

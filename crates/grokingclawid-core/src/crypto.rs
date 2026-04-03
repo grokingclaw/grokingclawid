@@ -278,6 +278,10 @@ pub fn sha256_hex(data: &[u8]) -> String {
 }
 
 /// Compute the audit chain hash for an entry.
+///
+/// Uses `\x00` field separators to prevent collision attacks where
+/// different field boundaries produce the same concatenated string
+/// (e.g., agent_id="ab"+action="cd" vs agent_id="abc"+action="d").
 pub fn compute_chain_hash(
     prev_hash: &str,
     agent_id: &str,
@@ -285,7 +289,10 @@ pub fn compute_chain_hash(
     target: &str,
     timestamp: i64,
 ) -> String {
-    let input = format!("{}{}{}{}{}", prev_hash, agent_id, action, target, timestamp);
+    let input = format!(
+        "{}\x00{}\x00{}\x00{}\x00{}",
+        prev_hash, agent_id, action, target, timestamp
+    );
     sha256_hex(input.as_bytes())
 }
 

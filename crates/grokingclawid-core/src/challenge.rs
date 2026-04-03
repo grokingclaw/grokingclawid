@@ -245,7 +245,7 @@ pub fn verify_response(
     });
 
     // 5. ML-DSA-65 signature (if hybrid)
-    let _pq_ok = if card.crypto_scheme == CryptoScheme::Hybrid {
+    let _pq_checked = if card.crypto_scheme == CryptoScheme::Hybrid {
         match (&response.pq_signature, &card.pq_public_key) {
             (Some(pq_sig), Some(pq_pub)) => {
                 let valid = crypto::mldsa_verify(pq_pub, &sign_bytes, pq_sig)

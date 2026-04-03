@@ -491,7 +491,13 @@ async fn birth_local(
     // Generate keypair and issue local identity
     let (signing_key, verifying_key) = grokingclawid_core::crypto::generate_keypair();
     let pem = grokingclawid_core::crypto::encode_private_key_pem(&signing_key);
-    std::fs::write(agent_dir.join("identity").join("agent.pem"), &pem)?;
+    let pem_path = agent_dir.join("identity").join("agent.pem");
+    std::fs::write(&pem_path, &pem)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&pem_path, std::fs::Permissions::from_mode(0o600))?;
+    }
 
     let pub_key_b64 = grokingclawid_core::crypto::encode_public_key(&verifying_key);
 

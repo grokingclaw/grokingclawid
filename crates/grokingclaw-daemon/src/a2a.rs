@@ -164,6 +164,8 @@ pub struct A2aServer {
     tasks: RwLock<HashMap<String, A2aTask>>,
     base_url: String,
     bind_addr: SocketAddr,
+    /// Require ClawID signature auth on RPC endpoints.
+    require_auth: bool,
     /// Daemon's own agent card (loaded from identity dir).
     daemon_card: RwLock<Option<AgentCard>>,
 }
@@ -173,12 +175,14 @@ impl A2aServer {
         daemon: Arc<DaemonState>,
         bind_addr: SocketAddr,
         base_url: String,
+        require_auth: bool,
     ) -> Self {
         Self {
             daemon,
             tasks: RwLock::new(HashMap::new()),
             base_url,
             bind_addr,
+            require_auth,
             daemon_card: RwLock::new(None),
         }
     }
@@ -385,6 +389,14 @@ impl A2aServer {
             tracing::warn!(error = %e, "A2A request signature verification failed");
         }
         let caller_verified = sig_verified.unwrap_or(false);
+
+        // Enforce authentication if configured
+        if self.require_auth && !caller_verified {
+            return Ok(self.json_response(StatusCode::UNAUTHORIZED, &JsonRpcResponse::error(
+                None, -32000,
+                "Authentication required. Sign requests with a ClawID key (Signature + Signature-Input headers).".into(),
+            )));
+        }
 
         // Parse body
         let body_bytes: Bytes = req.collect().await

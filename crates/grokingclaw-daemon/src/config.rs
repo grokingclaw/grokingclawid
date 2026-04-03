@@ -117,6 +117,11 @@ pub struct A2aSection {
     /// Base URL for agent card discovery (external-facing).
     #[serde(default = "default_a2a_base_url")]
     pub base_url: String,
+    /// Require ClawID signature authentication on A2A RPC endpoints.
+    /// When true, unauthenticated requests are rejected with 401.
+    /// Agent card discovery (GET /.well-known/) is always public.
+    #[serde(default = "default_true")]
+    pub require_auth: bool,
 }
 
 fn default_a2a_port() -> u16 {
@@ -132,6 +137,7 @@ impl Default for A2aSection {
             enabled: true,
             port: default_a2a_port(),
             base_url: default_a2a_base_url(),
+            require_auth: true,
         }
     }
 }

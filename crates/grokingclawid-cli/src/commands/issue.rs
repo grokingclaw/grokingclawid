@@ -137,6 +137,14 @@ pub fn execute(
     fs::write(&key_path, &key_pem)
         .with_context(|| format!("Failed to write {}", key_path.display()))?;
 
+    // Restrict key file permissions to owner-only (0o600)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&key_path, fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to set permissions on {}", key_path.display()))?;
+    }
+
     // Record in audit log using Ed25519 key (always available)
     let ed_key = match &scheme {
         CryptoScheme::Ed25519 => crypto::decode_private_key_pem(&key_pem)?,

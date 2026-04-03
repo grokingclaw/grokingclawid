@@ -289,6 +289,28 @@ async fn handle_forward(
                 }
             };
 
+            let scheme = target_uri.scheme_str().unwrap_or("http");
+            if scheme == "https" {
+                // HTTPS forward proxy not supported — use CONNECT tunnel instead
+                tracing::warn!(
+                    url = %uri,
+                    "HTTPS forward proxy not supported. Use HTTP CONNECT tunneling for HTTPS targets."
+                );
+                let _ = state.audit.log_request(&ProxyAuditEntry {
+                    method: method.clone(),
+                    url: uri.clone(),
+                    status_code: Some(400),
+                    scope_decision: "allow".into(),
+                    request_size_bytes: req_size,
+                    response_size_bytes: 0,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    signed,
+                }).await;
+                return Ok(error_response(
+                    "HTTPS forward proxy not supported. Configure your client to use HTTP CONNECT tunneling for HTTPS targets."
+                ));
+            }
+
             let host = target_uri.host().unwrap_or("localhost");
             let port = target_uri.port_u16().unwrap_or(80);
             let addr = format!("{}:{}", host, port);

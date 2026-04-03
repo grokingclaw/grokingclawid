@@ -524,6 +524,7 @@ async fn cmd_start(
             Arc::clone(&state),
             a2a_bind,
             config.a2a.base_url.clone(),
+            config.a2a.require_auth,
         ));
         // Load daemon identity card for A2A discovery
         if let Err(e) = a2a_server.load_daemon_card().await {
