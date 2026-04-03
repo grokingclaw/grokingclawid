@@ -213,7 +213,16 @@ GrokingClawID was submitted to NIST NCCoE as a working reference implementation 
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, testing, and PR process.
+**We're actively seeking collaborators.** If you're working on AI agent infrastructure, multi-agent security, post-quantum cryptography, or MCP tooling — we'd love to work with you.
+
+Areas where help would have the most impact:
+- **Language bindings** — Python, Go, TypeScript wrappers around the CLI/library
+- **Framework integrations** — CrewAI, LangGraph, AutoGen, OpenAI Agents SDK
+- **MCP ecosystem** — more guard middleware, tool server extensions
+- **Formal verification** — proving the delegation chain and crypto properties
+- **Documentation** — tutorials, integration guides, architecture deep-dives
+
+Open an issue, submit a PR, or reach out at contact@grokingclaw.com. See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and PR process.
 
 ## Links
 
