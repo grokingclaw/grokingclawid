@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core library (shared crypto, models, audit)
-grokingclawid-core = { path = "../grokingclawid-core" }
+grokingclawid-core = { path = "../grokingclawid-core", features = ["wallet"] }
 
 # Sidecar proxy (scope enforcement, identity signing)
 grokingclaw-proxy = { path = "../grokingclaw-proxy" }

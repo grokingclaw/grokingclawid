@@ -233,6 +233,17 @@ pub struct IotaClient {
 
 #[cfg(feature = "wallet")]
 impl IotaClient {
+    /// Create a new client with a custom RPC endpoint.
+    ///
+    /// Faucet defaults to testnet. Use `testnet()` or `devnet()` for preset configs.
+    pub fn new(rpc_url: &str) -> Self {
+        Self {
+            rpc_url: rpc_url.trim_end_matches('/').to_string(),
+            faucet_url: TESTNET_FAUCET.to_string(),
+            http: reqwest::Client::new(),
+        }
+    }
+
     /// Create a new client for IOTA testnet.
     pub fn testnet() -> Self {
         Self {
