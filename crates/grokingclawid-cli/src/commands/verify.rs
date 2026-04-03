@@ -10,6 +10,7 @@ use std::path::Path;
 use crate::commands::issue::card_signing_payload;
 use grokingclawid_core::crypto;
 use grokingclawid_core::models::{AgentCard, CryptoScheme};
+use grokingclawid_core::revocation;
 
 /// Execute the `verify` command.
 pub fn execute(card_path: &Path) -> Result<()> {
@@ -79,11 +80,32 @@ pub fn execute(card_path: &Path) -> Result<()> {
     println!("  Time OK:   {}", if not_before { "✅ Yes" } else { "⚠️  Not yet valid" });
     println!();
 
+    // Check revocation status
+    let revoked = match revocation::open_db() {
+        Ok(conn) => revocation::is_revoked(&conn, &card.id).unwrap_or(false),
+        Err(_) => false, // If DB can't be opened, skip revocation check
+    };
+    println!("  Revoked:   {}", if revoked { "❌ Yes" } else { "✅ No" });
+    println!();
+
     let all_sigs_valid = ed_valid && pq_valid.unwrap_or(true);
-    if all_sigs_valid && not_expired && not_before {
+    if all_sigs_valid && not_expired && not_before && !revoked {
         println!("  ══ RESULT: ✅ VALID ══");
     } else {
         println!("  ══ RESULT: ❌ INVALID ══");
+        if revoked {
+            let reason = match revocation::open_db() {
+                Ok(conn) => revocation::get_revocation(&conn, &card.id)
+                    .ok()
+                    .flatten()
+                    .map(|e| format!("{} ({})", e.reason, e.revoked_at.to_rfc3339()))
+                    .unwrap_or_default(),
+                Err(_) => String::new(),
+            };
+            if !reason.is_empty() {
+                println!("  Revocation: {}", reason);
+            }
+        }
         std::process::exit(1);
     }
 

@@ -13,6 +13,7 @@ pub mod models;
 pub mod audit;
 pub mod challenge;
 pub mod httpsig;
+pub mod revocation;
 
 #[cfg(feature = "wallet")]
 pub mod iota;

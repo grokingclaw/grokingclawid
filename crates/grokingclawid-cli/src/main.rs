@@ -20,7 +20,7 @@ use std::path::PathBuf;
 /// GrokingClawID — AI Agent Identity Management
 #[derive(Parser)]
 #[command(name = "grokingclawid")]
-#[command(version = "0.2.0")]
+#[command(version = "0.4.0")]
 #[command(about = "Cryptographic identity management for AI agents")]
 #[command(long_about = "GrokingClawID provides hybrid Ed25519 + ML-DSA-65 (post-quantum) identity \n\
     issuance, verification, delegation, and tamper-evident audit logging for \n\
@@ -238,6 +238,43 @@ enum Commands {
         headers: Vec<String>,
     },
 
+    /// Rotate an agent card's keys (generate new keypair, re-sign, archive old)
+    Rotate {
+        /// Path to agent-card.json
+        #[arg(long = "agent-card")]
+        agent_card: PathBuf,
+
+        /// Path to agent-key.pem (current key, proves ownership)
+        #[arg(long)]
+        key: PathBuf,
+
+        /// New time-to-live (e.g., "24h", "30d")
+        #[arg(long, default_value = "24h")]
+        ttl: String,
+
+        /// Output directory for new card + key (old key is archived here)
+        #[arg(long, short, default_value = ".")]
+        output: PathBuf,
+    },
+
+    /// Revoke an agent card (mark as permanently invalid)
+    Revoke {
+        /// Path to agent-card.json
+        #[arg(long = "agent-card")]
+        agent_card: PathBuf,
+
+        /// Path to agent-key.pem (proves authority to revoke)
+        #[arg(long)]
+        key: PathBuf,
+
+        /// Reason for revocation
+        #[arg(long, default_value = "key compromised")]
+        reason: String,
+    },
+
+    /// List all revoked agent cards
+    RevocationList,
+
     /// IOTA testnet wallet operations
     Wallet {
         #[command(subcommand)]
@@ -434,6 +471,21 @@ fn main() {
             &method, &url, &signature_input, &signature,
             pq_signature.as_deref(), &agent_card, &headers,
         ),
+
+        Commands::Rotate {
+            agent_card,
+            key,
+            ttl,
+            output,
+        } => commands::rotate::execute(&agent_card, &key, &ttl, &output),
+
+        Commands::Revoke {
+            agent_card,
+            key,
+            reason,
+        } => commands::revoke::execute(&agent_card, &key, &reason),
+
+        Commands::RevocationList => commands::revoke::execute_list(),
 
         Commands::Wallet { action } => match action {
             WalletAction::Init { agent_card } => {
