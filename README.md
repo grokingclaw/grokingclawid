@@ -2,162 +2,204 @@
 
 **Cryptographic identity for AI agents.** Post-quantum ready.
 
-GrokingClawID is a standalone CLI tool that creates, manages, and verifies cryptographic identities for AI agents. It's the foundation layer that agent authorization systems, governance platforms, and runtime brokers build on top of.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Tests](https://img.shields.io/badge/tests-97%20passing-green.svg)](#tests)
 
-## Why
+GrokingClawID creates, manages, and verifies unforgeable cryptographic identities for AI agents. It's the foundation layer that authorization systems, governance platforms, and agent runtimes build on.
 
-Every agent security company builds locks. Nobody makes unforgeable keys. GrokingClawID does.
-
-500K lines of defensive code in modern agent harnesses. Zero lines of cryptographic identity. Agents impersonate each other, leak credentials, and operate without provable identity. We fix that.
+500K lines of defensive code in modern agent harnesses. Zero lines of cryptographic identity. We fix that.
 
 ## Features
 
-- **Post-quantum cryptography** — Ed25519 + ML-DSA-65 (FIPS 204) hybrid signatures
-- **Agent identity cards** — A2A-compatible, machine-readable, cryptographically signed
-- **SPIFFE ID generation** — Standard workload identity format
-- **Delegation chains** — Scoped, time-bounded authority transfer between agents
-- **Challenge-response auth** — Prove identity without revealing keys
-- **HTTP message signatures** — RFC 9421 compatible request signing
-- **Hash-chained audit log** — Tamper-evident identity event trail
-- **IOTA Rebased wallet** — Testnet agent-to-agent payments (Ed25519 → IOTA address derivation)
-- **MCP server** — Expose identity operations to any MCP-compatible agent
+| Feature | Description |
+|---|---|
+| **Post-quantum crypto** | Ed25519 + ML-DSA-65 (FIPS 204) hybrid — both must validate |
+| **Agent identity cards** | A2A-compatible, signed, with SPIFFE IDs |
+| **Key rotation** | Generate new keys, re-sign card, archive old key |
+| **Revocation** | Permanent invalidation with signed revocation registry |
+| **Delegation chains** | Scope-narrowing, time-bounded authority transfer |
+| **MCP auth guard** | Wrap any MCP server with identity enforcement |
+| **Challenge-response** | Mutual authentication without shared secrets |
+| **HTTP signatures** | RFC 9421 request signing (classical + PQ) |
+| **Audit log** | Hash-chained, signed, tamper-evident |
+| **IOTA wallet** | Agent-to-agent payments (same Ed25519 key) |
+| **MCP tool server** | Expose all operations to MCP-compatible agents |
+| **Daemon** | Agent host with mesh networking, birth protocol, Merkle anchoring |
 
 ## Install
 
 ```bash
-# From source (CLI only)
+# From source
 cargo install --path crates/grokingclawid-cli
 
-# Or build everything
+# Or build everything (CLI + daemon)
 cargo build --release
-# Binaries at target/release/grokingclawid and target/release/grokingclaw
+# → target/release/grokingclawid  (CLI, ~4.7MB)
+# → target/release/grokingclaw    (daemon)
 ```
 
-**Requirements:** Rust 1.70+, no external dependencies at runtime.
+**Requirements:** Rust 1.70+. No runtime dependencies.
 
 ## Quick Start
 
 ```bash
-# Create a new agent identity (Ed25519 + ML-DSA-65 hybrid)
-grokingclawid issue --name "my-agent" --hybrid
+# Issue a hybrid identity (Ed25519 + ML-DSA-65)
+grokingclawid issue \
+  --name "my-agent" \
+  --owner "me@example.com" \
+  --scope "read,write" \
+  --ttl 7d \
+  --crypto hybrid \
+  --output ./id
 
-# Export the agent card (A2A-compatible JSON)
-grokingclawid export --name "my-agent" --format agent-card
+# Verify the card
+grokingclawid verify --agent-card ./id/agent-card.json
 
-# Sign a message
-echo "hello" | grokingclawid sign --name "my-agent"
+# Rotate keys (new keypair, same identity)
+grokingclawid rotate \
+  --agent-card ./id/agent-card.json \
+  --key ./id/agent-key.pem \
+  --ttl 7d \
+  --output ./id
 
-# Verify a signature
-echo "hello" | grokingclawid verify --name "my-agent" --signature <sig>
+# Delegate to a sub-agent (narrowed scope)
+grokingclawid delegate \
+  --from ./id/agent-card.json \
+  --key ./id/agent-key.pem \
+  --to "sub-agent" \
+  --scope "read" \
+  --ttl 1h
 
-# Challenge-response authentication
-grokingclawid challenge --name "my-agent" --mode prove
+# Sign an HTTP request (RFC 9421)
+grokingclawid sign \
+  --method POST \
+  --url "https://api.example.com/deploy" \
+  --agent-card ./id/agent-card.json \
+  --key ./id/agent-key.pem
 
-# Delegate authority to another agent
-grokingclawid delegate --from "parent-agent" --to "child-agent" \
-  --scope "read,write" --expires "2026-12-31"
+# Mutual authentication
+grokingclawid challenge --agent-card ./id/agent-card.json --require-scope write
+grokingclawid respond --challenge challenge.json --agent-card ./id/agent-card.json --key ./id/agent-key.pem
+grokingclawid verify-response --challenge challenge.json --response response.json
+
+# Export as A2A Agent Card
+grokingclawid export --agent-card ./id/agent-card.json --base-url "https://api.example.com"
 
 # View audit log
-grokingclawid audit --name "my-agent"
+grokingclawid audit --last 24h
+
+# Revoke a compromised card
+grokingclawid revoke --agent-card ./id/agent-card.json --key ./id/agent-key.pem --reason "key compromised"
 ```
+
+## MCP Auth Guard
+
+Wrap **any** MCP server with identity enforcement. Zero changes to the server.
+
+```bash
+grokingclawid guard --scope read,write -- node my-mcp-server.js
+```
+
+The guard intercepts all JSON-RPC requests over stdio:
+1. Agents must call `clawid_authenticate` with their card first
+2. Guard verifies signatures, expiration, revocation, and scopes
+3. Authenticated requests are forwarded; unauthorized requests are blocked
+
+```
+Agent ──stdio──► GrokingClawID Guard ──stdio──► MCP Server
+                 ├─ verify card
+                 ├─ check scopes
+                 ├─ check revocation
+                 └─ forward or block
+```
+
+Works with Claude Code, Codex, Cursor, or any MCP-compatible runtime.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│         Authorization Layer             │
-│  (IndyKite, Aembit, Astrix, Opal, etc.) │
-├─────────────────────────────────────────┤
-│        GrokingClawID (this)             │
-│   Cryptographic Identity Foundation     │
-│                                         │
-│  Ed25519 + ML-DSA │ DIDs │ SPIFFE │ A2A │
-│  Delegation │ Challenge │ Audit │ HTTP  │
-├─────────────────────────────────────────┤
-│            Agent Runtime                │
-│   (Claude Code, Codex, Gemini, etc.)    │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Authorization Layer                       │
+│           (IndyKite, Aembit, Astrix, Opal, etc.)            │
+├─────────────────────────────────────────────────────────────┤
+│                    GrokingClawID (this)                      │
+│              Cryptographic Identity Foundation               │
+│                                                             │
+│  Ed25519 + ML-DSA-65 │ A2A │ SPIFFE │ RFC 9421 │ MCP Guard │
+│  Delegation │ Challenge │ Rotation │ Revocation │ Audit     │
+├─────────────────────────────────────────────────────────────┤
+│                      Agent Runtime                          │
+│         (Claude Code, Codex, Gemini, CrewAI, etc.)          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-GrokingClawID sits between the agent runtime and authorization layer. It answers one question: **"Who IS this agent, provably?"**
+## Cryptography
 
-## Crypto
-
-| Algorithm | Purpose | Standard |
-|-----------|---------|----------|
-| Ed25519 | Classical signatures | RFC 8032 |
-| ML-DSA-65 | Post-quantum signatures | FIPS 204 |
-| Hybrid | Both simultaneously | GrokingClaw spec |
-| BLAKE2b-256 | Hashing (audit, wallet) | RFC 7693 |
-| SHA-256 | Content addressing | FIPS 180-4 |
+| Algorithm | Purpose | Standard | Size |
+|---|---|---|---|
+| Ed25519 | Classical signatures | RFC 8032 | 64B sig |
+| ML-DSA-65 | Post-quantum signatures | FIPS 204 | 3,309B sig |
+| Hybrid | Both simultaneously | Both must validate | |
+| SHA-256 | Audit chain hashing | FIPS 180-4 | |
 
 All crypto runs locally. No key material leaves your machine. No cloud dependencies.
 
-## Standards
-
-- **W3C DID** — Decentralized Identifiers for agents
-- **SPIFFE** — Secure Production Identity Framework
-- **A2A** — Google's Agent-to-Agent protocol agent cards
-- **RFC 9421** — HTTP Message Signatures
-- **FIPS 204** — ML-DSA post-quantum digital signatures
-- **MCP** — Model Context Protocol server integration
+**Why hybrid?** Defense in depth. If ML-DSA-65 has an undiscovered weakness, Ed25519 still protects. If quantum computers break Ed25519, ML-DSA-65 still protects. Both must validate — AND, not OR.
 
 ## Project Structure
 
-Cargo workspace with 4 crates (~12,000 LOC Rust):
-
 ```
-crates/
-├── grokingclawid-core/      # Shared library
-│   └── src/
-│       ├── crypto.rs         # Ed25519 + ML-DSA-65 hybrid crypto
-│       ├── models.rs         # Identity, AgentCard, DelegationChain types
-│       ├── audit.rs          # Hash-chained tamper-evident audit log
-│       ├── challenge.rs      # Challenge-response authentication
-│       ├── httpsig.rs        # HTTP message signature (RFC 9421)
-│       ├── iota.rs           # IOTA Rebased wallet integration
-│       └── ws.rs             # WebSocket transport
-│
-├── grokingclawid-cli/        # CLI binary (grokingclawid)
-│   └── src/
-│       ├── main.rs           # CLI entry + Clap commands
-│       └── commands/         # issue, sign, verify, export, delegate, wallet, audit
-│
-├── grokingclaw-proxy/        # Sidecar HTTP proxy
-│   └── src/
-│       ├── server.rs         # HTTP CONNECT tunnel + forward proxy
-│       ├── scope.rs          # Domain allowlist + rate limiting
-│       ├── signer.rs         # RFC 9421 request signing injection
-│       └── audit.rs          # Proxy-level audit logging
-│
-└── grokingclaw-daemon/       # Agent host daemon (grokingclaw)
-    └── src/
-        ├── daemon.rs         # State management, local birth
-        ├── supervisor.rs     # Process lifecycle, health checks, restart budget
-        ├── ipc.rs            # Unix socket JSON-RPC 2.0 server
-        ├── mesh.rs           # Mesh networking (Headscale/WireGuard)
-        ├── birth.rs          # Birth protocol (dual-parent signing)
-        ├── templates.rs      # Template registry + installer
-        ├── anchor.rs         # Merkle breadcrumb anchoring
-        ├── updates.rs        # Daemon + template update checker
-        └── main.rs           # CLI (start/stop/status/birth/agents/mesh/audit)
-
-mcp-server/                   # MCP server (Node.js)
-├── index.js
-├── test.js
-└── README.md
+grokingclawid/
+├── crates/
+│   ├── grokingclawid-core/       # Shared library (crypto, models, audit, revocation)
+│   ├── grokingclawid-cli/        # CLI binary — issue, verify, rotate, revoke, guard, etc.
+│   ├── grokingclaw-proxy/        # Sidecar HTTP proxy (scope, RFC 9421 signing, audit)
+│   └── grokingclaw-daemon/       # Agent host daemon (mesh, birth protocol, anchoring)
+├── mcp-server/                   # MCP tool server (Node.js, zero deps)
+├── docs/
+│   └── NCCOE-REFERENCE-GUIDE.md  # NIST NCCoE reference implementation guide
+├── COMMERCIAL.md                 # Pricing (free tier: 5 agents)
+├── SECURITY.md                   # Security policy + crypto assumptions
+└── LICENSE                       # Apache 2.0
 ```
+
+**~22,000 lines of Rust** across 4 crates. 97 tests.
+
+## Tests
+
+```bash
+cargo test
+# 97 passed, 0 failed
+#   44 — core (crypto, license, audit, revocation, challenge, httpsig)
+#   10 — proxy (scope, signing, tunneling)
+#   28 — daemon (config, supervisor, birth, mesh, templates)
+#   13 — CLI integration tests
+#    1 — CLI (TTL parsing)
+#    1 — doctest (httpsig example)
+```
+
+## Standards Compliance
+
+| Standard | Implementation |
+|---|---|
+| NIST FIPS 204 | ML-DSA-65 post-quantum signatures |
+| RFC 8032 | Ed25519 signatures |
+| RFC 9421 | HTTP Message Signatures |
+| Google A2A | Agent Card export |
+| SPIFFE | Workload identity URIs |
+| MCP | Auth guard + tool server |
 
 ## NIST Submission
 
-GrokingClawID is the reference implementation for our public comment submission to NIST NCCoE on AI Agent Identity & Authorization (April 2026). See [our submission](https://grokingclaw.com) for details.
+GrokingClawID was submitted to NIST NCCoE as a working reference implementation for the AI Agent Identity & Authorization project (April 2026). See [`docs/NCCOE-REFERENCE-GUIDE.md`](docs/NCCOE-REFERENCE-GUIDE.md) for the full guide.
 
 ## License
 
-Apache 2.0 — free to use, modify, and distribute.
+[Apache 2.0](LICENSE) — free to use, modify, and distribute.
 
 ## Links
 
 - **Website:** [grokingclaw.com](https://grokingclaw.com)
-- **Contact:** huynguyenusa@icloud.com
-- **Author:** GrokingClaw Labs
+- **Author:** Michael N Thornton, GrokingClaw Labs
+- **Contact:** michaelnvgt@icloud.com

@@ -13,8 +13,8 @@ We'll acknowledge within 48 hours and aim to patch critical issues within 7 days
 
 | Version | Supported |
 |---------|-----------|
-| 0.2.x   | ✅ Current |
-| < 0.2   | ❌         |
+| 0.4.x   | ✅ Current |
+| < 0.4   | ❌         |
 
 ## Cryptographic Assumptions
 

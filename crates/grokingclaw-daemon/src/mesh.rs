@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use grokingclawid_core::license::{self, LicenseFeature};
+
 // ─── Types ──────────────────────────────────────────────────────────────
 
 /// Mesh network configuration.
@@ -469,13 +471,18 @@ impl MeshClient {
     /// Connect to the mesh network.
     ///
     /// Performs:
-    /// 1. Load daemon card + key
-    /// 2. Challenge-response auth with coordination server
-    /// 3. Register WireGuard public key
-    /// 4. Set up WireGuard interface (via wg-quick)
+    /// 1. Check license allows mesh networking
+    /// 2. Load daemon card + key
+    /// 3. Challenge-response auth with coordination server
+    /// 4. Register WireGuard public key
+    /// 5. Set up WireGuard interface (via wg-quick)
     ///
     /// Gracefully handles failures — mesh is optional.
     pub async fn connect(&self) -> Result<()> {
+        // Check license for mesh feature
+        let lic = license::load_license();
+        license::check_feature(LicenseFeature::Mesh, &lic)?;
+
         // Set state to connecting
         {
             let mut state = self.state.write().await;

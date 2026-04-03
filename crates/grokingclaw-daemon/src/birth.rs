@@ -19,6 +19,7 @@ use crate::config::DaemonConfig;
 use crate::mesh::MeshClient;
 use crate::supervisor::{AgentConfig, AgentInfo, ModelConfig, ResourceConfig, RestartConfig};
 use crate::templates::TemplateRegistry;
+use grokingclawid_core::license::{self, LicenseFeature};
 
 // ─── Birth Protocol Message Types ──────────────────────────────────────
 
@@ -225,6 +226,7 @@ pub enum BirthMode {
 ///
 /// Tries mesh birth if mesh is connected, falls back to local birth.
 /// The supervisor, template registry, and mesh client are all injected.
+/// Enforces license tier for birth protocol features.
 pub async fn birth_agent(
     config: &DaemonConfig,
     root_dir: &Path,
@@ -232,23 +234,35 @@ pub async fn birth_agent(
     templates: &TemplateRegistry,
     params: BirthParams,
 ) -> Result<BirthResult> {
-    // Try mesh birth first
+    let lic = license::load_license();
+
+    // Try mesh birth first (requires BirthMesh feature)
     if let Some(mesh) = mesh {
         if mesh.is_connected().await {
-            match birth_via_mesh(config, root_dir, mesh, templates, &params).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    tracing::warn!(
-                        error = %e,
-                        "Mesh birth failed, falling back to local birth"
-                    );
-                    // Fall through to local birth
+            // Check license for mesh birth
+            if let Err(e) = license::check_feature(LicenseFeature::BirthMesh, &lic) {
+                tracing::info!(
+                    "Mesh birth not available on {} tier: {}. Using local birth.",
+                    lic.tier, e
+                );
+            } else {
+                match birth_via_mesh(config, root_dir, mesh, templates, &params).await {
+                    Ok(result) => return Ok(result),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "Mesh birth failed, falling back to local birth"
+                        );
+                        // Fall through to local birth
+                    }
                 }
             }
         }
     }
 
     // Fallback: local birth
+    // Local birth is available on Indie+ tiers; Free tier can still do
+    // basic local birth (agent creation without the full birth protocol)
     birth_local(config, root_dir, templates, &params).await
 }
 

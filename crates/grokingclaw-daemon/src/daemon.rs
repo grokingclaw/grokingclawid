@@ -18,6 +18,7 @@ use crate::mesh::MeshClient;
 use crate::supervisor::Supervisor;
 use crate::templates::TemplateRegistry;
 use crate::updates::UpdateChecker;
+use grokingclawid_core::license;
 
 /// Shared daemon state accessible from IPC handlers and the main loop.
 pub struct DaemonState {
@@ -64,6 +65,7 @@ impl DaemonState {
     /// Birth a new agent using the birth protocol.
     ///
     /// Delegates to birth::birth_agent which handles mesh vs local birth.
+    /// Enforces license limits before allowing agent creation.
     pub async fn birth_agent(
         &self,
         params: BirthParams,
@@ -73,7 +75,12 @@ impl DaemonState {
             anyhow::bail!("Agent '{}' already exists", params.name);
         }
 
-        // Check agent limit
+        // ── License enforcement ──────────────────────────────────────
+        let lic = license::load_license();
+        let current_agents = self.supervisor.list_agents().await.len() as u32;
+        license::check_limit("agents", current_agents, &lic)?;
+
+        // Check agent limit from daemon config too
         let current_count = self.supervisor.list_agents().await.len();
         if current_count >= self.config.resources.max_agents as usize {
             anyhow::bail!(

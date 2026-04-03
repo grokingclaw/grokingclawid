@@ -299,6 +299,24 @@ enum Commands {
         #[command(subcommand)]
         action: WalletAction,
     },
+
+    /// Manage license (show, activate, deactivate)
+    License {
+        #[command(subcommand)]
+        action: Option<LicenseAction>,
+    },
+}
+
+/// License sub-subcommands.
+#[derive(Subcommand)]
+enum LicenseAction {
+    /// Activate a license key
+    Activate {
+        /// License key string
+        key: String,
+    },
+    /// Deactivate current license (revert to Free tier)
+    Deactivate,
 }
 
 /// Wallet sub-subcommands.
@@ -512,6 +530,12 @@ fn main() {
             allow_init,
             server,
         } => commands::guard::execute(&scope, require_pq, allow_init, &server),
+
+        Commands::License { action } => match action {
+            None => commands::license::execute_show(),
+            Some(LicenseAction::Activate { key }) => commands::license::execute_activate(&key),
+            Some(LicenseAction::Deactivate) => commands::license::execute_deactivate(),
+        },
 
         Commands::Wallet { action } => match action {
             WalletAction::Init { agent_card } => {

@@ -9,6 +9,7 @@
 //! - IOTA wallet integration (feature-gated)
 
 pub mod crypto;
+pub mod license;
 pub mod models;
 pub mod audit;
 pub mod challenge;
