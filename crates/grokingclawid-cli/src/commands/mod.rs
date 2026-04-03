@@ -2,6 +2,7 @@ pub mod audit;
 pub mod challenge;
 pub mod delegate;
 pub mod export;
+pub mod guard;
 pub mod issue;
 pub mod revoke;
 pub mod rotate;

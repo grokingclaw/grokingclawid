@@ -275,6 +275,25 @@ enum Commands {
     /// List all revoked agent cards
     RevocationList,
 
+    /// MCP auth guard — wrap any MCP server with identity verification
+    Guard {
+        /// Required scopes (comma-separated). Agent must have ALL of these.
+        #[arg(long, default_value = "read")]
+        scope: String,
+
+        /// Require post-quantum (ML-DSA-65) signatures
+        #[arg(long)]
+        require_pq: bool,
+
+        /// Allow unauthenticated requests during initialization
+        #[arg(long)]
+        allow_init: bool,
+
+        /// MCP server command (everything after --)
+        #[arg(trailing_var_arg = true, required = true)]
+        server: Vec<String>,
+    },
+
     /// IOTA testnet wallet operations
     Wallet {
         #[command(subcommand)]
@@ -486,6 +505,13 @@ fn main() {
         } => commands::revoke::execute(&agent_card, &key, &reason),
 
         Commands::RevocationList => commands::revoke::execute_list(),
+
+        Commands::Guard {
+            scope,
+            require_pq,
+            allow_init,
+            server,
+        } => commands::guard::execute(&scope, require_pq, allow_init, &server),
 
         Commands::Wallet { action } => match action {
             WalletAction::Init { agent_card } => {

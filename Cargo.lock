@@ -706,6 +706,7 @@ dependencies = [
  "ed25519-dalek",
  "grokingclawid-core",
  "predicates",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
