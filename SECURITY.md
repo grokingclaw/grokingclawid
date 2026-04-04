@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-Email **michaelnvgt@icloud.com** with:
+Email **contact@grokingclaw.com** with:
 - Description of the vulnerability
 - Steps to reproduce
 - Impact assessment

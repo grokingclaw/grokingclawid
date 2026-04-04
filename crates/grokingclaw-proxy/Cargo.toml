@@ -2,7 +2,7 @@
 name = "grokingclaw-proxy"
 version = "0.4.1"
 edition = "2021"
-authors = ["GrokingClaw Labs <michaelnvgt@icloud.com>"]
+authors = ["GrokingClaw Labs <contact@grokingclaw.com>"]
 description = "GrokingClaw sidecar proxy — scope enforcement, identity signing, audit logging"
 license = "Apache-2.0"
 

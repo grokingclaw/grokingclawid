@@ -72,21 +72,21 @@ pub struct BirthResourceConfig {
     pub max_disk_gb: u64,
 }
 
-/// Validation request from Naja to Morpheus (for reference — Naja creates this).
+/// Validation request from the issuer to an external validator (if configured).
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationRequest {
     /// Original birth request.
     pub birth_request: BirthRequest,
-    /// Naja's assessment/context.
-    pub naja_context: String,
+    /// Issuer's assessment/context.
+    pub issuer_context: String,
     /// Policy rules to evaluate.
     pub policy_rules: Vec<String>,
-    /// Naja timestamp.
+    /// Issuer timestamp.
     pub forwarded_at: DateTime<Utc>,
 }
 
-/// Validation response from Morpheus to Naja.
+/// Validation response from an external validator.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationResponse {
@@ -100,13 +100,13 @@ pub struct ValidationResponse {
     pub ttl_adjustment: Option<i64>,
     /// Risk score (0.0 = safe, 1.0 = high risk).
     pub risk_score: f64,
-    /// Morpheus signature over the response.
-    pub morpheus_signature: String,
+    /// Validator signature over the response.
+    pub validator_signature: String,
     /// Timestamp.
     pub validated_at: DateTime<Utc>,
 }
 
-/// Birth certificate issued by Naja after successful validation.
+/// Birth certificate issued by the daemon after successful validation.
 /// Stored locally in agent's identity directory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BirthCertificate {
@@ -130,11 +130,11 @@ pub struct BirthCertificate {
     pub issued_at: DateTime<Utc>,
     /// When the delegation expires.
     pub expires_at: DateTime<Utc>,
-    /// Naja's signature over the certificate.
-    pub naja_signature: String,
-    /// Morpheus validation reference.
-    pub morpheus_validation_ref: String,
-    /// Chain of trust: daemon → Naja → Morpheus.
+    /// Issuer's signature over the certificate.
+    pub issuer_signature: String,
+    /// Validator reference (if external validation was used).
+    pub validator_ref: String,
+    /// Chain of trust: daemon → issuer → validator.
     pub trust_chain: Vec<String>,
 }
 
@@ -380,7 +380,7 @@ async fn birth_via_mesh(
         "public_key": agent_public_key,
         "crypto_scheme": "ed25519",
         "issued_at": certificate.issued_at.to_rfc3339(),
-        "issuer": "naja",
+        "issuer": "daemon",
         "birth_certificate_id": certificate.certificate_id,
     });
     std::fs::write(
@@ -661,9 +661,9 @@ mod tests {
             approved_domains: vec!["api.openai.com".to_string()],
             issued_at: Utc::now(),
             expires_at: Utc::now() + chrono::Duration::days(30),
-            naja_signature: "sig-placeholder".to_string(),
-            morpheus_validation_ref: "val-001".to_string(),
-            trust_chain: vec!["daemon".to_string(), "naja".to_string(), "morpheus".to_string()],
+            issuer_signature: "sig-placeholder".to_string(),
+            validator_ref: "val-001".to_string(),
+            trust_chain: vec!["daemon".to_string(), "issuer".to_string(), "validator".to_string()],
         };
 
         let json = serde_json::to_string(&cert).unwrap();
