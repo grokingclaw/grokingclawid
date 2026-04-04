@@ -132,11 +132,7 @@ impl IotaWsClient {
     /// `true` to continue listening, `false` to stop.
     ///
     /// This is the core streaming primitive — everything else builds on it.
-    pub async fn subscribe_events<F>(
-        &self,
-        filter: EventFilter,
-        mut callback: F,
-    ) -> Result<()>
+    pub async fn subscribe_events<F>(&self, filter: EventFilter, mut callback: F) -> Result<()>
     where
         F: FnMut(IotaEvent) -> bool,
     {
@@ -153,7 +149,9 @@ impl IotaWsClient {
         };
 
         let msg_text = serde_json::to_string(&subscribe_msg)?;
-        ws_stream.send(Message::Text(msg_text.into())).await
+        ws_stream
+            .send(Message::Text(msg_text.into()))
+            .await
             .context("Failed to send subscription request")?;
 
         // Read subscription confirmation
@@ -172,7 +170,9 @@ impl IotaWsClient {
                     if let Ok(notification) = serde_json::from_str::<WsNotification>(&text) {
                         if notification.method.as_deref() == Some("iota_subscribeEvent") {
                             if let Some(params) = notification.params {
-                                if let Ok(event) = serde_json::from_value::<IotaEvent>(params.result) {
+                                if let Ok(event) =
+                                    serde_json::from_value::<IotaEvent>(params.result)
+                                {
                                     if !callback(event) {
                                         break;
                                     }
@@ -201,11 +201,7 @@ impl IotaWsClient {
     ///
     /// This opens TWO subscriptions — one for sender, one for recipient —
     /// and merges them into a single stream.
-    pub async fn watch_address<F>(
-        &self,
-        address: &str,
-        mut callback: F,
-    ) -> Result<()>
+    pub async fn watch_address<F>(&self, address: &str, mut callback: F) -> Result<()>
     where
         F: FnMut(IotaEvent, &str) -> bool + Send,
     {
@@ -220,7 +216,9 @@ impl IotaWsClient {
             method: "iota_subscribeEvent".to_string(),
             params: vec![serde_json::json!({"Sender": address})],
         };
-        ws_stream.send(Message::Text(serde_json::to_string(&sender_sub)?.into())).await?;
+        ws_stream
+            .send(Message::Text(serde_json::to_string(&sender_sub)?.into()))
+            .await?;
 
         // Read confirmation
         let _ = ws_stream.next().await;
@@ -232,7 +230,9 @@ impl IotaWsClient {
             method: "iota_subscribeEvent".to_string(),
             params: vec![serde_json::json!({"Recipient": address})],
         };
-        ws_stream.send(Message::Text(serde_json::to_string(&recipient_sub)?.into())).await?;
+        ws_stream
+            .send(Message::Text(serde_json::to_string(&recipient_sub)?.into()))
+            .await?;
 
         // Read confirmation
         let _ = ws_stream.next().await;
@@ -249,7 +249,9 @@ impl IotaWsClient {
                                 } else {
                                     "incoming"
                                 };
-                                if let Ok(event) = serde_json::from_value::<IotaEvent>(params.result) {
+                                if let Ok(event) =
+                                    serde_json::from_value::<IotaEvent>(params.result)
+                                {
                                     if !callback(event, direction) {
                                         break;
                                     }
@@ -281,7 +283,10 @@ impl IotaWsClient {
         limit: u32,
     ) -> Result<Vec<serde_json::Value>> {
         // Use HTTP for historical queries (WebSocket is for streaming)
-        let http_url = self.ws_url.replace("wss://", "https://").replace("ws://", "http://");
+        let http_url = self
+            .ws_url
+            .replace("wss://", "https://")
+            .replace("ws://", "http://");
         let client = reqwest::Client::new();
 
         let req = serde_json::json!({
@@ -291,9 +296,15 @@ impl IotaWsClient {
             "params": [filter, null, limit, false]
         });
 
-        let resp = client.post(&http_url).json(&req).send().await
+        let resp = client
+            .post(&http_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to query events")?;
-        let body: serde_json::Value = resp.json().await
+        let body: serde_json::Value = resp
+            .json()
+            .await
             .context("Failed to parse events response")?;
 
         if let Some(err) = body.get("error") {

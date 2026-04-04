@@ -13,16 +13,12 @@ use grokingclawid_core::models::{AgentCard, CryptoScheme};
 use grokingclawid_core::revocation;
 
 /// Execute the `revoke` command.
-pub fn execute(
-    agent_card_path: &Path,
-    key_path: &Path,
-    reason: &str,
-) -> Result<()> {
+pub fn execute(agent_card_path: &Path, key_path: &Path, reason: &str) -> Result<()> {
     // Load agent card
     let card_json = fs::read_to_string(agent_card_path)
         .with_context(|| format!("Failed to read agent card: {}", agent_card_path.display()))?;
-    let card: AgentCard = serde_json::from_str(&card_json)
-        .context("Failed to parse agent card JSON")?;
+    let card: AgentCard =
+        serde_json::from_str(&card_json).context("Failed to parse agent card JSON")?;
 
     // Load private key
     let key_pem = fs::read_to_string(key_path)
@@ -38,14 +34,7 @@ pub fn execute(
 
     // Revoke in registry
     let revoke_conn = revocation::open_db()?;
-    let entry = revocation::revoke(
-        &revoke_conn,
-        &card.id,
-        &card.name,
-        reason,
-        "self",
-        &ed_key,
-    )?;
+    let entry = revocation::revoke(&revoke_conn, &card.id, &card.name, reason, "self", &ed_key)?;
 
     // Record in audit log
     let audit_conn = audit::open_db()?;
@@ -64,7 +53,10 @@ pub fn execute(
     println!("  Reason:    {}", entry.reason);
     println!("  Revoked:   {}", entry.revoked_at.to_rfc3339());
     println!();
-    println!("  The agent card at {} is no longer valid.", agent_card_path.display());
+    println!(
+        "  The agent card at {} is no longer valid.",
+        agent_card_path.display()
+    );
     println!("  Any `verify` check will now reject this card.");
 
     Ok(())

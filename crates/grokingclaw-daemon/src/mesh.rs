@@ -126,30 +126,16 @@ pub struct PingResult {
 #[allow(dead_code)]
 pub trait MeshTransport: Send + Sync {
     /// Authenticate with the coordination server using ClawID challenge-response.
-    async fn authenticate(
-        &self,
-        card: &[u8],
-        challenge_response: &[u8],
-    ) -> Result<AuthResult>;
+    async fn authenticate(&self, card: &[u8], challenge_response: &[u8]) -> Result<AuthResult>;
 
     /// Register this node's WireGuard public key.
-    async fn register_node(
-        &self,
-        wireguard_pubkey: &str,
-    ) -> Result<NodeRegistration>;
+    async fn register_node(&self, wireguard_pubkey: &str) -> Result<NodeRegistration>;
 
     /// Register an agent for mesh discovery.
-    async fn register_agent(
-        &self,
-        agent_id: &str,
-        agent_did: &str,
-    ) -> Result<()>;
+    async fn register_agent(&self, agent_id: &str, agent_did: &str) -> Result<()>;
 
     /// Deregister an agent from mesh discovery.
-    async fn deregister_agent(
-        &self,
-        agent_id: &str,
-    ) -> Result<()>;
+    async fn deregister_agent(&self, agent_id: &str) -> Result<()>;
 
     /// List all peers on the mesh.
     async fn list_peers(&self) -> Result<Vec<MeshPeer>>;
@@ -186,17 +172,14 @@ impl HeadscaleTransport {
 
 #[async_trait]
 impl MeshTransport for HeadscaleTransport {
-    async fn authenticate(
-        &self,
-        card: &[u8],
-        challenge_response: &[u8],
-    ) -> Result<AuthResult> {
+    async fn authenticate(&self, card: &[u8], challenge_response: &[u8]) -> Result<AuthResult> {
         let payload = serde_json::json!({
             "card": base64::engine::general_purpose::STANDARD.encode(card),
             "challenge_response": base64::engine::general_purpose::STANDARD.encode(challenge_response),
         });
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&self.url("/v1/auth/challenge"))
             .json(&payload)
             .send()
@@ -214,8 +197,7 @@ impl MeshTransport for HeadscaleTransport {
             });
         }
 
-        let result: AuthResult = resp.json().await
-            .context("Failed to parse auth response")?;
+        let result: AuthResult = resp.json().await.context("Failed to parse auth response")?;
 
         if result.success {
             if let Some(ref token) = result.token {
@@ -227,18 +209,18 @@ impl MeshTransport for HeadscaleTransport {
         Ok(result)
     }
 
-    async fn register_node(
-        &self,
-        wireguard_pubkey: &str,
-    ) -> Result<NodeRegistration> {
+    async fn register_node(&self, wireguard_pubkey: &str) -> Result<NodeRegistration> {
         let token = self.auth_token.read().await;
-        let token = token.as_deref().context("Not authenticated — call authenticate() first")?;
+        let token = token
+            .as_deref()
+            .context("Not authenticated — call authenticate() first")?;
 
         let payload = serde_json::json!({
             "wireguard_pubkey": wireguard_pubkey,
         });
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&self.url("/v1/mesh/register"))
             .bearer_auth(token)
             .json(&payload)
@@ -246,17 +228,15 @@ impl MeshTransport for HeadscaleTransport {
             .await
             .context("Failed to register node")?;
 
-        let result: NodeRegistration = resp.json().await
+        let result: NodeRegistration = resp
+            .json()
+            .await
             .context("Failed to parse node registration response")?;
 
         Ok(result)
     }
 
-    async fn register_agent(
-        &self,
-        agent_id: &str,
-        agent_did: &str,
-    ) -> Result<()> {
+    async fn register_agent(&self, agent_id: &str, agent_did: &str) -> Result<()> {
         let token = self.auth_token.read().await;
         let token = token.as_deref().context("Not authenticated")?;
 
@@ -265,7 +245,8 @@ impl MeshTransport for HeadscaleTransport {
             "agent_did": agent_did,
         });
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&self.url("/v1/agents/register"))
             .bearer_auth(token)
             .json(&payload)
@@ -281,14 +262,12 @@ impl MeshTransport for HeadscaleTransport {
         Ok(())
     }
 
-    async fn deregister_agent(
-        &self,
-        agent_id: &str,
-    ) -> Result<()> {
+    async fn deregister_agent(&self, agent_id: &str) -> Result<()> {
         let token = self.auth_token.read().await;
         let token = token.as_deref().context("Not authenticated")?;
 
-        let resp = self.http
+        let resp = self
+            .http
             .delete(&self.url(&format!("/v1/agents/{}", agent_id)))
             .bearer_auth(token)
             .send()
@@ -307,14 +286,17 @@ impl MeshTransport for HeadscaleTransport {
         let token = self.auth_token.read().await;
         let token = token.as_deref().context("Not authenticated")?;
 
-        let resp = self.http
+        let resp = self
+            .http
             .get(&self.url("/v1/mesh/peers"))
             .bearer_auth(token)
             .send()
             .await
             .context("Failed to list mesh peers")?;
 
-        let peers: Vec<MeshPeer> = resp.json().await
+        let peers: Vec<MeshPeer> = resp
+            .json()
+            .await
             .context("Failed to parse peers response")?;
 
         Ok(peers)
@@ -324,7 +306,8 @@ impl MeshTransport for HeadscaleTransport {
         let token = self.auth_token.read().await;
         let token = token.as_deref().context("Not authenticated")?;
 
-        let resp = self.http
+        let resp = self
+            .http
             .post(&self.url("/v1/mesh/ping"))
             .bearer_auth(token)
             .json(&serde_json::json!({ "peer_did": peer_did }))
@@ -332,8 +315,7 @@ impl MeshTransport for HeadscaleTransport {
             .await
             .context("Failed to ping peer")?;
 
-        let result: PingResult = resp.json().await
-            .context("Failed to parse ping response")?;
+        let result: PingResult = resp.json().await.context("Failed to parse ping response")?;
 
         Ok(result)
     }
@@ -367,11 +349,7 @@ impl MockTransport {
 
 #[async_trait]
 impl MeshTransport for MockTransport {
-    async fn authenticate(
-        &self,
-        _card: &[u8],
-        _challenge_response: &[u8],
-    ) -> Result<AuthResult> {
+    async fn authenticate(&self, _card: &[u8], _challenge_response: &[u8]) -> Result<AuthResult> {
         Ok(AuthResult {
             success: true,
             mesh_ip: Some("100.64.0.1".to_string()),
@@ -380,10 +358,7 @@ impl MeshTransport for MockTransport {
         })
     }
 
-    async fn register_node(
-        &self,
-        _wireguard_pubkey: &str,
-    ) -> Result<NodeRegistration> {
+    async fn register_node(&self, _wireguard_pubkey: &str) -> Result<NodeRegistration> {
         Ok(NodeRegistration {
             node_id: "mock-node-001".to_string(),
             mesh_ip: "100.64.0.1".to_string(),
@@ -391,20 +366,13 @@ impl MeshTransport for MockTransport {
         })
     }
 
-    async fn register_agent(
-        &self,
-        agent_id: &str,
-        agent_did: &str,
-    ) -> Result<()> {
+    async fn register_agent(&self, agent_id: &str, agent_did: &str) -> Result<()> {
         let mut agents = self.agents.write().await;
         agents.push((agent_id.to_string(), agent_did.to_string()));
         Ok(())
     }
 
-    async fn deregister_agent(
-        &self,
-        agent_id: &str,
-    ) -> Result<()> {
+    async fn deregister_agent(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write().await;
         agents.retain(|(id, _)| id != agent_id);
         Ok(())
@@ -421,7 +389,11 @@ impl MeshTransport for MockTransport {
             peer_did: peer_did.to_string(),
             reachable,
             latency_ms: if reachable { Some(1) } else { None },
-            error: if reachable { None } else { Some("Peer not found".to_string()) },
+            error: if reachable {
+                None
+            } else {
+                Some("Peer not found".to_string())
+            },
         })
     }
 }
@@ -509,18 +481,20 @@ impl MeshClient {
 
     async fn do_connect(&self) -> Result<()> {
         // Load daemon card
-        let card_bytes = std::fs::read(&self.config.daemon_card_path)
-            .with_context(|| format!(
+        let card_bytes = std::fs::read(&self.config.daemon_card_path).with_context(|| {
+            format!(
                 "Failed to read daemon card: {}",
                 self.config.daemon_card_path.display()
-            ))?;
+            )
+        })?;
 
         // Load daemon signing key for challenge-response
-        let key_pem = std::fs::read_to_string(&self.config.daemon_key_path)
-            .with_context(|| format!(
+        let key_pem = std::fs::read_to_string(&self.config.daemon_key_path).with_context(|| {
+            format!(
                 "Failed to read daemon key: {}",
                 self.config.daemon_key_path.display()
-            ))?;
+            )
+        })?;
         let signing_key = grokingclawid_core::crypto::decode_private_key_pem(&key_pem)
             .context("Failed to decode daemon signing key")?;
 
@@ -528,7 +502,8 @@ impl MeshClient {
         let challenge_response = grokingclawid_core::crypto::sign(&signing_key, &card_bytes);
 
         // Authenticate with coordination server
-        let auth = self.transport
+        let auth = self
+            .transport
             .authenticate(&card_bytes, challenge_response.as_bytes())
             .await
             .context("Mesh authentication failed")?;
@@ -540,7 +515,8 @@ impl MeshClient {
             );
         }
 
-        let mesh_ip = auth.mesh_ip
+        let mesh_ip = auth
+            .mesh_ip
             .context("Auth succeeded but no mesh IP assigned")?;
 
         // Set up WireGuard if key exists
@@ -566,7 +542,10 @@ impl MeshClient {
     async fn setup_wireguard(&self) -> Result<()> {
         let wg_config = self.config.mesh_dir.join("wg0.conf");
         if !wg_config.exists() {
-            tracing::warn!("No WireGuard config found at {}, skipping", wg_config.display());
+            tracing::warn!(
+                "No WireGuard config found at {}, skipping",
+                wg_config.display()
+            );
             return Ok(());
         }
 
@@ -617,7 +596,9 @@ impl MeshClient {
             return Ok(());
         }
 
-        self.transport.register_agent(agent_id, agent_did).await
+        self.transport
+            .register_agent(agent_id, agent_did)
+            .await
             .with_context(|| format!("Failed to register agent {} on mesh", agent_id))?;
 
         tracing::info!(agent = %agent_id, "Agent registered on mesh");
@@ -631,7 +612,9 @@ impl MeshClient {
             return Ok(());
         }
 
-        self.transport.deregister_agent(agent_id).await
+        self.transport
+            .deregister_agent(agent_id)
+            .await
             .with_context(|| format!("Failed to deregister agent {} from mesh", agent_id))?;
 
         tracing::info!(agent = %agent_id, "Agent deregistered from mesh");
@@ -649,7 +632,11 @@ impl MeshClient {
 
         // Update cached state
         let mut state = self.state.write().await;
-        if let MeshState::Connected { peers: ref mut cached_peers, .. } = *state {
+        if let MeshState::Connected {
+            peers: ref mut cached_peers,
+            ..
+        } = *state
+        {
             *cached_peers = peers.clone();
         }
 
@@ -699,8 +686,14 @@ mod tests {
     #[tokio::test]
     async fn test_mock_transport_agents() {
         let transport = MockTransport::new();
-        transport.register_agent("agent-1", "did:iota:test1").await.unwrap();
-        transport.register_agent("agent-2", "did:iota:test2").await.unwrap();
+        transport
+            .register_agent("agent-1", "did:iota:test1")
+            .await
+            .unwrap();
+        transport
+            .register_agent("agent-2", "did:iota:test2")
+            .await
+            .unwrap();
 
         let agents = transport.agents.read().await;
         assert_eq!(agents.len(), 2);
@@ -729,7 +722,10 @@ mod tests {
         let client = MeshClient::new(config, transport);
 
         // Should not error when disconnected — just no-op
-        client.register_agent("agent-1", "did:iota:test1").await.unwrap();
+        client
+            .register_agent("agent-1", "did:iota:test1")
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

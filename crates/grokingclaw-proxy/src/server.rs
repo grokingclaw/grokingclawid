@@ -77,9 +77,7 @@ impl ProxyServer {
     /// Start listening. Returns the bound port and a join handle.
     ///
     /// The server runs until the returned `tokio::task::JoinHandle` is aborted.
-    pub async fn start(
-        self,
-    ) -> Result<(u16, tokio::task::JoinHandle<()>)> {
+    pub async fn start(self) -> Result<(u16, tokio::task::JoinHandle<()>)> {
         let listener = TcpListener::bind(self.bind_addr)
             .await
             .with_context(|| format!("Failed to bind proxy on {}", self.bind_addr))?;
@@ -150,7 +148,10 @@ async fn handle_connect(
     state: Arc<ProxyState>,
     req: Request<Incoming>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::Error> {
-    let host_port = req.uri().authority().map(|a| a.to_string())
+    let host_port = req
+        .uri()
+        .authority()
+        .map(|a| a.to_string())
         .unwrap_or_else(|| req.uri().to_string());
 
     let start = Instant::now();
@@ -164,38 +165,36 @@ async fn handle_connect(
     match decision {
         ScopeDecision::Allow => {
             // Log allowed CONNECT
-            let _ = state.audit.log_request(&ProxyAuditEntry {
-                method: "CONNECT".into(),
-                url: host_port.clone(),
-                status_code: Some(200),
-                scope_decision: "allow".into(),
-                request_size_bytes: 0,
-                response_size_bytes: 0,
-                duration_ms: start.elapsed().as_millis() as u64,
-                signed: false,
-            }).await;
+            let _ = state
+                .audit
+                .log_request(&ProxyAuditEntry {
+                    method: "CONNECT".into(),
+                    url: host_port.clone(),
+                    status_code: Some(200),
+                    scope_decision: "allow".into(),
+                    request_size_bytes: 0,
+                    response_size_bytes: 0,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    signed: false,
+                })
+                .await;
 
             // Establish tunnel
             tokio::spawn(async move {
                 match hyper::upgrade::on(req).await {
-                    Ok(upgraded) => {
-                        match TcpStream::connect(&host_port).await {
-                            Ok(mut target) => {
-                                let mut upgraded = TokioIo::new(upgraded);
-                                let _ = tokio::io::copy_bidirectional(
-                                    &mut upgraded,
-                                    &mut target,
-                                ).await;
-                            }
-                            Err(e) => {
-                                tracing::error!(
-                                    target = %host_port,
-                                    error = %e,
-                                    "Failed to connect to upstream"
-                                );
-                            }
+                    Ok(upgraded) => match TcpStream::connect(&host_port).await {
+                        Ok(mut target) => {
+                            let mut upgraded = TokioIo::new(upgraded);
+                            let _ = tokio::io::copy_bidirectional(&mut upgraded, &mut target).await;
                         }
-                    }
+                        Err(e) => {
+                            tracing::error!(
+                                target = %host_port,
+                                error = %e,
+                                "Failed to connect to upstream"
+                            );
+                        }
+                    },
                     Err(e) => {
                         tracing::error!(error = %e, "CONNECT upgrade failed");
                     }
@@ -242,9 +241,7 @@ async fn handle_forward(
             let existing_headers: Vec<(String, String)> = parts
                 .headers
                 .iter()
-                .map(|(k, v)| {
-                    (k.to_string(), v.to_str().unwrap_or("").to_string())
-                })
+                .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
 
             // Sign the request if signer is available
@@ -296,16 +293,19 @@ async fn handle_forward(
                     url = %uri,
                     "HTTPS forward proxy not supported. Use HTTP CONNECT tunneling for HTTPS targets."
                 );
-                let _ = state.audit.log_request(&ProxyAuditEntry {
-                    method: method.clone(),
-                    url: uri.clone(),
-                    status_code: Some(400),
-                    scope_decision: "allow".into(),
-                    request_size_bytes: req_size,
-                    response_size_bytes: 0,
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    signed,
-                }).await;
+                let _ = state
+                    .audit
+                    .log_request(&ProxyAuditEntry {
+                        method: method.clone(),
+                        url: uri.clone(),
+                        status_code: Some(400),
+                        scope_decision: "allow".into(),
+                        request_size_bytes: req_size,
+                        response_size_bytes: 0,
+                        duration_ms: start.elapsed().as_millis() as u64,
+                        signed,
+                    })
+                    .await;
                 return Ok(error_response(
                     "HTTPS forward proxy not supported. Configure your client to use HTTP CONNECT tunneling for HTTPS targets."
                 ));
@@ -319,16 +319,19 @@ async fn handle_forward(
                 Ok(s) => s,
                 Err(e) => {
                     tracing::error!(target = %addr, error = %e, "Upstream connect failed");
-                    let _ = state.audit.log_request(&ProxyAuditEntry {
-                        method: method.clone(),
-                        url: uri.clone(),
-                        status_code: Some(502),
-                        scope_decision: "allow".into(),
-                        request_size_bytes: req_size,
-                        response_size_bytes: 0,
-                        duration_ms: start.elapsed().as_millis() as u64,
-                        signed,
-                    }).await;
+                    let _ = state
+                        .audit
+                        .log_request(&ProxyAuditEntry {
+                            method: method.clone(),
+                            url: uri.clone(),
+                            status_code: Some(502),
+                            scope_decision: "allow".into(),
+                            request_size_bytes: req_size,
+                            response_size_bytes: 0,
+                            duration_ms: start.elapsed().as_millis() as u64,
+                            signed,
+                        })
+                        .await;
                     return Ok(error_response("Failed to connect to upstream"));
                 }
             };
@@ -375,21 +378,26 @@ async fn handle_forward(
             let resp_size = resp_bytes.len() as u64;
 
             // Audit log
-            let _ = state.audit.log_request(&ProxyAuditEntry {
-                method,
-                url: uri,
-                status_code: Some(status),
-                scope_decision: "allow".into(),
-                request_size_bytes: req_size,
-                response_size_bytes: resp_size,
-                duration_ms: start.elapsed().as_millis() as u64,
-                signed,
-            }).await;
+            let _ = state
+                .audit
+                .log_request(&ProxyAuditEntry {
+                    method,
+                    url: uri,
+                    status_code: Some(status),
+                    scope_decision: "allow".into(),
+                    request_size_bytes: req_size,
+                    response_size_bytes: resp_size,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    signed,
+                })
+                .await;
 
             // Reconstruct response
             let out_resp = Response::from_parts(
                 resp_parts,
-                Full::new(resp_bytes).map_err(|never| match never {}).boxed(),
+                Full::new(resp_bytes)
+                    .map_err(|never| match never {})
+                    .boxed(),
             );
 
             Ok(out_resp)
@@ -410,16 +418,17 @@ async fn handle_forward(
 // ─── Response helpers ───────────────────────────────────────────────
 
 fn empty_body() -> BoxBody<Bytes, hyper::Error> {
-    Empty::<Bytes>::new().map_err(|never| match never {}).boxed()
+    Empty::<Bytes>::new()
+        .map_err(|never| match never {})
+        .boxed()
 }
 
 fn deny_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
-    let body = format!(
-        "{{\"error\":\"scope_denied\",\"reason\":\"{}\"}}",
-        reason
-    );
+    let body = format!("{{\"error\":\"scope_denied\",\"reason\":\"{}\"}}", reason);
     let mut resp = Response::new(
-        Full::new(Bytes::from(body)).map_err(|never| match never {}).boxed(),
+        Full::new(Bytes::from(body))
+            .map_err(|never| match never {})
+            .boxed(),
     );
     *resp.status_mut() = StatusCode::FORBIDDEN;
     resp.headers_mut().insert(
@@ -430,12 +439,11 @@ fn deny_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
 }
 
 fn rate_limit_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
-    let body = format!(
-        "{{\"error\":\"rate_limited\",\"reason\":\"{}\"}}",
-        reason
-    );
+    let body = format!("{{\"error\":\"rate_limited\",\"reason\":\"{}\"}}", reason);
     let mut resp = Response::new(
-        Full::new(Bytes::from(body)).map_err(|never| match never {}).boxed(),
+        Full::new(Bytes::from(body))
+            .map_err(|never| match never {})
+            .boxed(),
     );
     *resp.status_mut() = StatusCode::TOO_MANY_REQUESTS;
     resp.headers_mut().insert(
@@ -448,7 +456,9 @@ fn rate_limit_response(reason: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
 fn error_response(msg: &str) -> Response<BoxBody<Bytes, hyper::Error>> {
     let body = format!("{{\"error\":\"proxy_error\",\"message\":\"{}\"}}", msg);
     let mut resp = Response::new(
-        Full::new(Bytes::from(body)).map_err(|never| match never {}).boxed(),
+        Full::new(Bytes::from(body))
+            .map_err(|never| match never {})
+            .boxed(),
     );
     *resp.status_mut() = StatusCode::BAD_GATEWAY;
     resp.headers_mut().insert(
@@ -497,15 +507,8 @@ mod tests {
         let agent_id = Uuid::new_v4();
 
         let scope = ScopeConfig::new(vec!["allowed.com".to_string()], 0);
-        let server = ProxyServer::new(
-            scope,
-            None,
-            &db_path,
-            agent_id,
-            Arc::new(signing_key),
-            0,
-        )
-        .unwrap();
+        let server =
+            ProxyServer::new(scope, None, &db_path, agent_id, Arc::new(signing_key), 0).unwrap();
 
         let (_port, handle) = server.start().await.unwrap();
 

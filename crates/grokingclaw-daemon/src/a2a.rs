@@ -149,10 +149,20 @@ struct JsonRpcError {
 
 impl JsonRpcResponse {
     fn success(id: Option<serde_json::Value>, result: serde_json::Value) -> Self {
-        Self { jsonrpc: "2.0".into(), id, result: Some(result), error: None }
+        Self {
+            jsonrpc: "2.0".into(),
+            id,
+            result: Some(result),
+            error: None,
+        }
     }
     fn error(id: Option<serde_json::Value>, code: i32, message: String) -> Self {
-        Self { jsonrpc: "2.0".into(), id, result: None, error: Some(JsonRpcError { code, message }) }
+        Self {
+            jsonrpc: "2.0".into(),
+            id,
+            result: None,
+            error: Some(JsonRpcError { code, message }),
+        }
     }
 }
 
@@ -189,7 +199,11 @@ impl A2aServer {
 
     /// Load the daemon's agent card from disk.
     pub async fn load_daemon_card(&self) -> Result<()> {
-        let card_path = self.daemon.root_dir.join("identity").join("daemon.card.json");
+        let card_path = self
+            .daemon
+            .root_dir
+            .join("identity")
+            .join("daemon.card.json");
         if card_path.exists() {
             let json = std::fs::read_to_string(&card_path)
                 .with_context(|| format!("Failed to read daemon card: {}", card_path.display()))?;
@@ -238,9 +252,7 @@ impl A2aServer {
                         .await
                     {
                         let err_str = e.to_string();
-                        if !err_str.contains("early eof")
-                            && !err_str.contains("connection reset")
-                        {
+                        if !err_str.contains("early eof") && !err_str.contains("connection reset") {
                             tracing::debug!(peer = %peer, error = %e, "A2A connection error");
                         }
                     }
@@ -267,25 +279,23 @@ impl A2aServer {
 
         let result = match (method, path.as_str()) {
             // ─── Agent Card Discovery ──────────────────────────────
-            (Method::GET, "/.well-known/agent-card.json") => {
-                self.handle_daemon_card().await
-            }
-            (Method::GET, _) if path.starts_with("/agents/") && path.ends_with("/.well-known/agent-card.json") => {
-                let name = path.strip_prefix("/agents/")
+            (Method::GET, "/.well-known/agent-card.json") => self.handle_daemon_card().await,
+            (Method::GET, _)
+                if path.starts_with("/agents/")
+                    && path.ends_with("/.well-known/agent-card.json") =>
+            {
+                let name = path
+                    .strip_prefix("/agents/")
                     .and_then(|s: &str| s.strip_suffix("/.well-known/agent-card.json"))
                     .unwrap_or("");
                 self.handle_agent_card(name).await
             }
 
             // ─── A2A JSON-RPC ──────────────────────────────────────
-            (Method::POST, "/a2a/rpc") => {
-                self.handle_a2a_rpc(req).await
-            }
+            (Method::POST, "/a2a/rpc") => self.handle_a2a_rpc(req).await,
 
             // ─── Daemon Control Channel ────────────────────────────
-            (Method::POST, "/control/revoke") => {
-                self.handle_control_revoke(req).await
-            }
+            (Method::POST, "/control/revoke") => self.handle_control_revoke(req).await,
 
             _ => Ok(self.json_response(
                 StatusCode::NOT_FOUND,
@@ -321,19 +331,26 @@ impl A2aServer {
         }
     }
 
-    async fn handle_agent_card(&self, name: &str) -> Result<Response<BoxBody<Bytes, hyper::Error>>> {
+    async fn handle_agent_card(
+        &self,
+        name: &str,
+    ) -> Result<Response<BoxBody<Bytes, hyper::Error>>> {
         // Look up agent identity card
         let agent_info = self.daemon.supervisor.get_agent(name).await;
         let agent_info = match agent_info {
             Some(info) => info,
-            None => return Ok(self.json_response(
-                StatusCode::NOT_FOUND,
-                &serde_json::json!({"error": format!("Agent '{}' not found", name)}),
-            )),
+            None => {
+                return Ok(self.json_response(
+                    StatusCode::NOT_FOUND,
+                    &serde_json::json!({"error": format!("Agent '{}' not found", name)}),
+                ))
+            }
         };
 
         // Try to load the agent's card from its identity dir
-        let card_path = self.daemon.root_dir
+        let card_path = self
+            .daemon
+            .root_dir
             .join("agents")
             .join(name)
             .join("identity")
@@ -399,26 +416,36 @@ impl A2aServer {
         }
 
         // Parse body
-        let body_bytes: Bytes = req.collect().await
+        let body_bytes: Bytes = req
+            .collect()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to read body: {}", e))?
             .to_bytes();
 
         let rpc_req: JsonRpcRequest = match serde_json::from_slice(&body_bytes) {
             Ok(r) => r,
             Err(e) => {
-                return Ok(self.json_response(StatusCode::OK, &JsonRpcResponse::error(
-                    None, -32700, format!("Parse error: {}", e),
-                )));
+                return Ok(self.json_response(
+                    StatusCode::OK,
+                    &JsonRpcResponse::error(None, -32700, format!("Parse error: {}", e)),
+                ));
             }
         };
 
         let id = rpc_req.id.clone();
         let response = match rpc_req.method.as_str() {
-            "message/send" => self.handle_message_send(rpc_req.params, caller_verified).await,
+            "message/send" => {
+                self.handle_message_send(rpc_req.params, caller_verified)
+                    .await
+            }
             "tasks/get" => self.handle_tasks_get(rpc_req.params).await,
             "tasks/list" => self.handle_tasks_list(rpc_req.params).await,
             "tasks/cancel" => self.handle_tasks_cancel(rpc_req.params).await,
-            _ => JsonRpcResponse::error(id.clone(), -32601, format!("Method not found: {}", rpc_req.method)),
+            _ => JsonRpcResponse::error(
+                id.clone(),
+                -32601,
+                format!("Method not found: {}", rpc_req.method),
+            ),
         };
 
         // Ensure the response id matches request id
@@ -438,48 +465,58 @@ impl A2aServer {
         caller_verified: bool,
     ) -> JsonRpcResponse {
         // Extract target agent from params
-        let agent_name = params.get("agent")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                // Try extracting from metadata
-                params.get("message")
-                    .and_then(|m| m.get("metadata"))
-                    .and_then(|md| md.get("target_agent"))
-                    .and_then(|v| v.as_str())
-            });
+        let agent_name = params.get("agent").and_then(|v| v.as_str()).or_else(|| {
+            // Try extracting from metadata
+            params
+                .get("message")
+                .and_then(|m| m.get("metadata"))
+                .and_then(|md| md.get("target_agent"))
+                .and_then(|v| v.as_str())
+        });
 
         // Extract message
         let message = match params.get("message") {
             Some(m) => m,
-            None => return JsonRpcResponse::error(None, -32602, "Missing 'message' parameter".into()),
+            None => {
+                return JsonRpcResponse::error(None, -32602, "Missing 'message' parameter".into())
+            }
         };
 
         // Parse parts to get text content
-        let text_content = message.get("parts")
+        let text_content = message
+            .get("parts")
             .and_then(|p| p.as_array())
-            .and_then(|arr| arr.iter().find_map(|part| {
-                if part.get("type").and_then(|t| t.as_str()) == Some("text") {
-                    part.get("text").and_then(|t| t.as_str()).map(|s| s.to_string())
-                } else {
-                    None
-                }
-            }))
+            .and_then(|arr| {
+                arr.iter().find_map(|part| {
+                    if part.get("type").and_then(|t| t.as_str()) == Some("text") {
+                        part.get("text")
+                            .and_then(|t| t.as_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
             .unwrap_or_default();
 
         // Create task
-        let task_id = params.get("id")
+        let task_id = params
+            .get("id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-        let context_id = params.get("contextId")
+        let context_id = params
+            .get("contextId")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
         let now = Utc::now();
         let user_message = A2aMessage {
             role: MessageRole::User,
-            parts: vec![A2aPart::Text { text: text_content.clone() }],
+            parts: vec![A2aPart::Text {
+                text: text_content.clone(),
+            }],
             metadata: Some(serde_json::json!({
                 "clawid_verified": caller_verified,
                 "received_at": now.to_rfc3339(),
@@ -489,10 +526,7 @@ impl A2aServer {
         // If a specific agent is targeted, verify it exists
         if let Some(name) = agent_name {
             if self.daemon.supervisor.get_agent(name).await.is_none() {
-                return JsonRpcResponse::error(
-                    None, -32001,
-                    format!("Agent '{}' not found", name),
-                );
+                return JsonRpcResponse::error(None, -32001, format!("Agent '{}' not found", name));
             }
         }
 
@@ -519,7 +553,10 @@ impl A2aServer {
         // Update stored task
         tasks.insert(task_id, response_task.clone());
 
-        JsonRpcResponse::success(None, serde_json::to_value(&response_task).unwrap_or_default())
+        JsonRpcResponse::success(
+            None,
+            serde_json::to_value(&response_task).unwrap_or_default(),
+        )
     }
 
     async fn handle_tasks_get(&self, params: serde_json::Value) -> JsonRpcResponse {
@@ -530,9 +567,9 @@ impl A2aServer {
 
         let tasks = self.tasks.read().await;
         match tasks.get(task_id) {
-            Some(task) => JsonRpcResponse::success(
-                None, serde_json::to_value(task).unwrap_or_default(),
-            ),
+            Some(task) => {
+                JsonRpcResponse::success(None, serde_json::to_value(task).unwrap_or_default())
+            }
             None => JsonRpcResponse::error(None, -32001, format!("Task '{}' not found", task_id)),
         }
     }
@@ -543,7 +580,8 @@ impl A2aServer {
 
         let tasks = self.tasks.read().await;
         let mut result: Vec<&A2aTask> = if let Some(ctx) = context_id {
-            tasks.values()
+            tasks
+                .values()
                 .filter(|t| t.context_id.as_deref() == Some(ctx))
                 .collect()
         } else {
@@ -569,23 +607,23 @@ impl A2aServer {
 
         let mut tasks = self.tasks.write().await;
         match tasks.get_mut(task_id) {
-            Some(task) => {
-                match task.status.state {
-                    TaskState::Completed | TaskState::Canceled | TaskState::Failed => {
-                        JsonRpcResponse::error(
-                            None, -32003,
-                            format!("Task '{}' is already in terminal state: {}", task_id, task.status.state),
-                        )
-                    }
-                    _ => {
-                        task.status.state = TaskState::Canceled;
-                        task.updated_at = Utc::now();
-                        JsonRpcResponse::success(
-                            None, serde_json::to_value(&*task).unwrap_or_default(),
-                        )
-                    }
+            Some(task) => match task.status.state {
+                TaskState::Completed | TaskState::Canceled | TaskState::Failed => {
+                    JsonRpcResponse::error(
+                        None,
+                        -32003,
+                        format!(
+                            "Task '{}' is already in terminal state: {}",
+                            task_id, task.status.state
+                        ),
+                    )
                 }
-            }
+                _ => {
+                    task.status.state = TaskState::Canceled;
+                    task.updated_at = Utc::now();
+                    JsonRpcResponse::success(None, serde_json::to_value(&*task).unwrap_or_default())
+                }
+            },
             None => JsonRpcResponse::error(None, -32001, format!("Task '{}' not found", task_id)),
         }
     }
@@ -597,7 +635,9 @@ impl A2aServer {
     /// Handles daemon-level commands (status, rotate-keys, etc.)
     /// and routes agent-targeted tasks to the appropriate agent.
     async fn process_task(&self, mut task: A2aTask, target_agent: Option<&str>) -> A2aTask {
-        let text = task.messages.first()
+        let text = task
+            .messages
+            .first()
             .and_then(|m| m.parts.first())
             .and_then(|p| match p {
                 A2aPart::Text { text } => Some(text.as_str()),
@@ -616,7 +656,9 @@ impl A2aServer {
 
         let agent_message = A2aMessage {
             role: MessageRole::Agent,
-            parts: vec![A2aPart::Text { text: response_text }],
+            parts: vec![A2aPart::Text {
+                text: response_text,
+            }],
             metadata: None,
         };
 
@@ -654,9 +696,15 @@ impl A2aServer {
                     data: serde_json::to_value(&agents).unwrap_or_default(),
                 }],
             };
-            (format!("{} agent(s) registered.", agents.len()), vec![artifact])
+            (
+                format!("{} agent(s) registered.", agents.len()),
+                vec![artifact],
+            )
         } else {
-            (format!("Received: \"{}\". No handler matched.", text), vec![])
+            (
+                format!("Received: \"{}\". No handler matched.", text),
+                vec![],
+            )
         }
     }
 
@@ -673,18 +721,24 @@ impl A2aServer {
                             data: serde_json::to_value(&info).unwrap_or_default(),
                         }],
                     };
-                    (format!("Agent '{}' status: {}", agent_name, info.status), vec![artifact])
+                    (
+                        format!("Agent '{}' status: {}", agent_name, info.status),
+                        vec![artifact],
+                    )
                 }
-                None => (format!("Agent '{}' not found.", agent_name), vec![])
+                None => (format!("Agent '{}' not found.", agent_name), vec![]),
             }
         } else if lower.contains("rotate") && lower.contains("key") {
             // Trigger key rotation for the agent
             // The agent's keys are in agents/<name>/identity/
-            (format!(
-                "Key rotation requested for agent '{}'. \
+            (
+                format!(
+                    "Key rotation requested for agent '{}'. \
                  This is a daemon-level operation — the agent will be restarted with new keys.",
-                agent_name
-            ), vec![])
+                    agent_name
+                ),
+                vec![],
+            )
         } else if lower.contains("logs") {
             match self.daemon.read_agent_logs(agent_name, 50).await {
                 Ok(logs) => {
@@ -694,7 +748,10 @@ impl A2aServer {
                     };
                     (format!("Logs for agent '{}':", agent_name), vec![artifact])
                 }
-                Err(e) => (format!("Failed to read logs for '{}': {}", agent_name, e), vec![])
+                Err(e) => (
+                    format!("Failed to read logs for '{}': {}", agent_name, e),
+                    vec![],
+                ),
             }
         } else if lower.contains("audit") {
             match self.daemon.query_audit(agent_name, 20, true).await {
@@ -703,16 +760,25 @@ impl A2aServer {
                         name: Some("agent-audit".into()),
                         parts: vec![A2aPart::Data { data: result }],
                     };
-                    (format!("Audit trail for agent '{}':", agent_name), vec![artifact])
+                    (
+                        format!("Audit trail for agent '{}':", agent_name),
+                        vec![artifact],
+                    )
                 }
-                Err(e) => (format!("Failed to query audit for '{}': {}", agent_name, e), vec![])
+                Err(e) => (
+                    format!("Failed to query audit for '{}': {}", agent_name, e),
+                    vec![],
+                ),
             }
         } else {
-            (format!(
-                "Task received for agent '{}': \"{}\". \
+            (
+                format!(
+                    "Task received for agent '{}': \"{}\". \
                  Available commands: status, rotate keys, logs, audit.",
-                agent_name, text
-            ), vec![])
+                    agent_name, text
+                ),
+                vec![],
+            )
         }
     }
 
@@ -735,7 +801,9 @@ impl A2aServer {
             ));
         }
 
-        let body_bytes: Bytes = req.collect().await
+        let body_bytes: Bytes = req
+            .collect()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to read body: {}", e))?
             .to_bytes();
 
@@ -745,8 +813,8 @@ impl A2aServer {
             reason: Option<String>,
         }
 
-        let revoke: RevokeRequest = serde_json::from_slice(&body_bytes)
-            .context("Invalid revoke request body")?;
+        let revoke: RevokeRequest =
+            serde_json::from_slice(&body_bytes).context("Invalid revoke request body")?;
 
         tracing::warn!(
             agent = %revoke.agent_name,
@@ -786,7 +854,9 @@ impl A2aServer {
     async fn verify_request_signature(&self, req: &Request<Incoming>) -> Result<bool> {
         let sig_header = req.headers().get("signature");
         let sig_input = req.headers().get("signature-input");
-        let agent_id = req.headers().get("x-clawid-agent")
+        let agent_id = req
+            .headers()
+            .get("x-clawid-agent")
             .and_then(|v: &hyper::header::HeaderValue| v.to_str().ok());
 
         // If no signature headers, request is unauthenticated
@@ -794,9 +864,13 @@ impl A2aServer {
             return Ok(false);
         }
 
-        let sig_value = sig_header.unwrap().to_str()
+        let sig_value = sig_header
+            .unwrap()
+            .to_str()
             .context("Invalid Signature header encoding")?;
-        let input_value = sig_input.unwrap().to_str()
+        let input_value = sig_input
+            .unwrap()
+            .to_str()
             .context("Invalid Signature-Input header encoding")?;
 
         // Extract the signature bytes
@@ -813,10 +887,13 @@ impl A2aServer {
         // Reconstruct the signature base from Signature-Input
         let method = req.method().as_str();
         let uri = req.uri().to_string();
-        let authority = req.uri().authority()
+        let authority = req
+            .uri()
+            .authority()
             .map(|a: &hyper::http::uri::Authority| a.to_string())
             .or_else(|| {
-                req.headers().get("host")
+                req.headers()
+                    .get("host")
                     .and_then(|v: &hyper::header::HeaderValue| v.to_str().ok())
                     .map(|s: &str| s.to_string())
             })
@@ -832,7 +909,9 @@ impl A2aServer {
         if let Some(agent_id_str) = agent_id {
             // Look in our managed agents
             if let Some(agent_info) = self.daemon.supervisor.get_agent(agent_id_str).await {
-                let key_path = self.daemon.root_dir
+                let key_path = self
+                    .daemon
+                    .root_dir
                     .join("agents")
                     .join(&agent_info.name)
                     .join("identity")
@@ -843,7 +922,8 @@ impl A2aServer {
                     let card: AgentCard = serde_json::from_str(&card_json)?;
 
                     // Verify Ed25519 signature
-                    let sig_b64_encoded = base64::engine::general_purpose::STANDARD.encode(&sig_bytes);
+                    let sig_b64_encoded =
+                        base64::engine::general_purpose::STANDARD.encode(&sig_bytes);
                     let verified = grokingclawid_core::crypto::verify(
                         &card.public_key,
                         sig_base.as_bytes(),
@@ -857,8 +937,9 @@ impl A2aServer {
                     // Verify PQ signature if present
                     if let Some(pq_sig_header) = req.headers().get("x-clawid-pq-signature") {
                         if let Some(ref pq_pk) = card.pq_public_key {
-                            let pq_sig = pq_sig_header.to_str()
-                                .map_err(|e| anyhow::anyhow!("Invalid PQ signature header: {}", e))?;
+                            let pq_sig = pq_sig_header.to_str().map_err(|e| {
+                                anyhow::anyhow!("Invalid PQ signature header: {}", e)
+                            })?;
                             let pq_verified = grokingclawid_core::crypto::mldsa_verify(
                                 pq_pk,
                                 sig_base.as_bytes(),
@@ -940,18 +1021,24 @@ mod tests {
             messages: vec![
                 A2aMessage {
                     role: MessageRole::User,
-                    parts: vec![A2aPart::Text { text: "hello".into() }],
+                    parts: vec![A2aPart::Text {
+                        text: "hello".into(),
+                    }],
                     metadata: None,
                 },
                 A2aMessage {
                     role: MessageRole::Agent,
-                    parts: vec![A2aPart::Text { text: "world".into() }],
+                    parts: vec![A2aPart::Text {
+                        text: "world".into(),
+                    }],
                     metadata: None,
                 },
             ],
             artifacts: vec![A2aArtifact {
                 name: Some("result".into()),
-                parts: vec![A2aPart::Data { data: serde_json::json!({"key": "value"}) }],
+                parts: vec![A2aPart::Data {
+                    data: serde_json::json!({"key": "value"}),
+                }],
             }],
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -990,7 +1077,9 @@ mod tests {
     fn test_a2a_message_roles() {
         let user_msg = A2aMessage {
             role: MessageRole::User,
-            parts: vec![A2aPart::Text { text: "test".into() }],
+            parts: vec![A2aPart::Text {
+                text: "test".into(),
+            }],
             metadata: None,
         };
         let json = serde_json::to_string(&user_msg).unwrap();
@@ -998,7 +1087,9 @@ mod tests {
 
         let agent_msg = A2aMessage {
             role: MessageRole::Agent,
-            parts: vec![A2aPart::Text { text: "response".into() }],
+            parts: vec![A2aPart::Text {
+                text: "response".into(),
+            }],
             metadata: None,
         };
         let json = serde_json::to_string(&agent_msg).unwrap();
@@ -1007,11 +1098,15 @@ mod tests {
 
     #[test]
     fn test_a2a_part_variants() {
-        let text_part = A2aPart::Text { text: "hello".into() };
+        let text_part = A2aPart::Text {
+            text: "hello".into(),
+        };
         let json = serde_json::to_string(&text_part).unwrap();
         assert!(json.contains("\"text\""));
 
-        let data_part = A2aPart::Data { data: serde_json::json!({"key": 42}) };
+        let data_part = A2aPart::Data {
+            data: serde_json::json!({"key": 42}),
+        };
         let json = serde_json::to_string(&data_part).unwrap();
         assert!(json.contains("\"data\""));
         assert!(json.contains("42"));

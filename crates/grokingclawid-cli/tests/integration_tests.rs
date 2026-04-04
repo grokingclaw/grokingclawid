@@ -24,17 +24,26 @@ fn test_issue_ed25519() {
     cmd()
         .args([
             "issue",
-            "--name", "test-agent",
-            "--owner", "test@example.com",
-            "--scope", "read,write",
-            "--ttl", "1h",
-            "--type", "instance",
-            "--crypto", "ed25519",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "test-agent",
+            "--owner",
+            "test@example.com",
+            "--scope",
+            "read,write",
+            "--ttl",
+            "1h",
+            "--type",
+            "instance",
+            "--crypto",
+            "ed25519",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Agent identity issued successfully"))
+        .stdout(predicate::str::contains(
+            "Agent identity issued successfully",
+        ))
         .stdout(predicate::str::contains("ed25519"));
 
     let card_path = out.join("agent-card.json");
@@ -42,7 +51,8 @@ fn test_issue_ed25519() {
     assert!(card_path.exists());
     assert!(key_path.exists());
 
-    let card: serde_json::Value = serde_json::from_str(&fs::read_to_string(&card_path).unwrap()).unwrap();
+    let card: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&card_path).unwrap()).unwrap();
     assert_eq!(card["name"], "test-agent");
     assert_eq!(card["owner"], "test@example.com");
     assert_eq!(card["crypto_scheme"], "ed25519");
@@ -63,19 +73,30 @@ fn test_verify_ed25519() {
     cmd()
         .args([
             "issue",
-            "--name", "verifiable-agent",
-            "--owner", "admin@example.com",
-            "--scope", "read,write,execute",
-            "--ttl", "2h",
-            "--type", "session",
-            "--crypto", "ed25519",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "verifiable-agent",
+            "--owner",
+            "admin@example.com",
+            "--scope",
+            "read,write,execute",
+            "--ttl",
+            "2h",
+            "--type",
+            "session",
+            "--crypto",
+            "ed25519",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
 
     cmd()
-        .args(["verify", "--agent-card", out.join("agent-card.json").to_str().unwrap()])
+        .args([
+            "verify",
+            "--agent-card",
+            out.join("agent-card.json").to_str().unwrap(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("VALID"))
@@ -93,21 +114,26 @@ fn test_issue_hybrid_default() {
     cmd()
         .args([
             "issue",
-            "--name", "hybrid-agent",
-            "--owner", "pq@example.com",
-            "--scope", "read,write",
-            "--ttl", "12h",
-            "--type", "instance",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "hybrid-agent",
+            "--owner",
+            "pq@example.com",
+            "--scope",
+            "read,write",
+            "--ttl",
+            "12h",
+            "--type",
+            "instance",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success()
         .stdout(predicate::str::contains("hybrid"))
         .stdout(predicate::str::contains("ML-DSA-65"));
 
-    let card: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(out.join("agent-card.json")).unwrap()
-    ).unwrap();
+    let card: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("agent-card.json")).unwrap()).unwrap();
     assert_eq!(card["crypto_scheme"], "hybrid");
     assert!(card["pq_public_key"].is_string());
     assert!(card["pq_signature"].is_string());
@@ -126,18 +152,28 @@ fn test_verify_hybrid() {
     cmd()
         .args([
             "issue",
-            "--name", "pq-verified-agent",
-            "--owner", "quantum@example.com",
-            "--scope", "admin",
-            "--ttl", "4h",
-            "--crypto", "hybrid",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "pq-verified-agent",
+            "--owner",
+            "quantum@example.com",
+            "--scope",
+            "admin",
+            "--ttl",
+            "4h",
+            "--crypto",
+            "hybrid",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
 
     cmd()
-        .args(["verify", "--agent-card", out.join("agent-card.json").to_str().unwrap()])
+        .args([
+            "verify",
+            "--agent-card",
+            out.join("agent-card.json").to_str().unwrap(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Ed25519:   ✅ VALID"))
@@ -157,13 +193,20 @@ fn test_delegate_hybrid_narrows_scope() {
     cmd()
         .args([
             "issue",
-            "--name", "parent-agent",
-            "--owner", "root@example.com",
-            "--scope", "read,write,admin",
-            "--ttl", "24h",
-            "--type", "instance",
-            "--crypto", "hybrid",
-            "-o", parent_dir.to_str().unwrap(),
+            "--name",
+            "parent-agent",
+            "--owner",
+            "root@example.com",
+            "--scope",
+            "read,write,admin",
+            "--ttl",
+            "24h",
+            "--type",
+            "instance",
+            "--crypto",
+            "hybrid",
+            "-o",
+            parent_dir.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -171,21 +214,27 @@ fn test_delegate_hybrid_narrows_scope() {
     cmd()
         .args([
             "delegate",
-            "--from", parent_dir.join("agent-card.json").to_str().unwrap(),
-            "--key", parent_dir.join("agent-key.pem").to_str().unwrap(),
-            "--to", "child-agent",
-            "--scope", "read",
-            "--ttl", "30m",
-            "-o", deleg_dir.to_str().unwrap(),
+            "--from",
+            parent_dir.join("agent-card.json").to_str().unwrap(),
+            "--key",
+            parent_dir.join("agent-key.pem").to_str().unwrap(),
+            "--to",
+            "child-agent",
+            "--scope",
+            "read",
+            "--ttl",
+            "30m",
+            "-o",
+            deleg_dir.to_str().unwrap(),
         ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Delegation token created"))
         .stdout(predicate::str::contains("hybrid"));
 
-    let token: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(deleg_dir.join("delegation-token.json")).unwrap()
-    ).unwrap();
+    let token: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(deleg_dir.join("delegation-token.json")).unwrap())
+            .unwrap();
     assert_eq!(token["agent_name"], "child-agent");
     assert_eq!(token["scopes"], serde_json::json!(["read"]));
     assert_eq!(token["crypto_scheme"], "hybrid");
@@ -202,12 +251,18 @@ fn test_delegate_rejects_wider_scope() {
     cmd()
         .args([
             "issue",
-            "--name", "limited-parent",
-            "--owner", "user@example.com",
-            "--scope", "read",
-            "--ttl", "24h",
-            "--crypto", "ed25519",
-            "-o", parent_dir.to_str().unwrap(),
+            "--name",
+            "limited-parent",
+            "--owner",
+            "user@example.com",
+            "--scope",
+            "read",
+            "--ttl",
+            "24h",
+            "--crypto",
+            "ed25519",
+            "-o",
+            parent_dir.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -215,12 +270,18 @@ fn test_delegate_rejects_wider_scope() {
     cmd()
         .args([
             "delegate",
-            "--from", parent_dir.join("agent-card.json").to_str().unwrap(),
-            "--key", parent_dir.join("agent-key.pem").to_str().unwrap(),
-            "--to", "sneaky-agent",
-            "--scope", "write",
-            "--ttl", "10m",
-            "-o", deleg_dir.to_str().unwrap(),
+            "--from",
+            parent_dir.join("agent-card.json").to_str().unwrap(),
+            "--key",
+            parent_dir.join("agent-key.pem").to_str().unwrap(),
+            "--to",
+            "sneaky-agent",
+            "--scope",
+            "write",
+            "--ttl",
+            "10m",
+            "-o",
+            deleg_dir.to_str().unwrap(),
         ])
         .assert()
         .failure()
@@ -238,22 +299,33 @@ fn test_issue_with_spiffe_id() {
     cmd()
         .args([
             "issue",
-            "--name", "spiffe-agent",
-            "--owner", "infra@example.com",
-            "--scope", "read",
-            "--ttl", "1h",
-            "--crypto", "ed25519",
-            "--trust-domain", "example.org",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "spiffe-agent",
+            "--owner",
+            "infra@example.com",
+            "--scope",
+            "read",
+            "--ttl",
+            "1h",
+            "--crypto",
+            "ed25519",
+            "--trust-domain",
+            "example.org",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("SPIFFE ID: spiffe://example.org/agent/instance/spiffe-agent"));
+        .stdout(predicate::str::contains(
+            "SPIFFE ID: spiffe://example.org/agent/instance/spiffe-agent",
+        ));
 
-    let card: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(out.join("agent-card.json")).unwrap()
-    ).unwrap();
-    assert_eq!(card["spiffe_id"], "spiffe://example.org/agent/instance/spiffe-agent");
+    let card: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("agent-card.json")).unwrap()).unwrap();
+    assert_eq!(
+        card["spiffe_id"],
+        "spiffe://example.org/agent/instance/spiffe-agent"
+    );
 }
 
 // ─── A2A Export ─────────────────────────────────────────────────────────
@@ -267,12 +339,18 @@ fn test_export_a2a() {
     cmd()
         .args([
             "issue",
-            "--name", "a2a-agent",
-            "--owner", "ops@example.com",
-            "--scope", "read,write,deploy",
-            "--ttl", "8h",
-            "--crypto", "hybrid",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "a2a-agent",
+            "--owner",
+            "ops@example.com",
+            "--scope",
+            "read,write,deploy",
+            "--ttl",
+            "8h",
+            "--crypto",
+            "hybrid",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -281,20 +359,25 @@ fn test_export_a2a() {
     cmd()
         .args([
             "export",
-            "--agent-card", out.join("agent-card.json").to_str().unwrap(),
-            "--base-url", "https://api.example.com",
-            "-o", a2a_output.to_str().unwrap(),
+            "--agent-card",
+            out.join("agent-card.json").to_str().unwrap(),
+            "--base-url",
+            "https://api.example.com",
+            "-o",
+            a2a_output.to_str().unwrap(),
         ])
         .assert()
         .success()
         .stdout(predicate::str::contains("A2A agent card exported"))
         .stdout(predicate::str::contains("a2a-agent"));
 
-    let a2a: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(&a2a_output).unwrap()
-    ).unwrap();
+    let a2a: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&a2a_output).unwrap()).unwrap();
     assert_eq!(a2a["name"], "a2a-agent");
-    assert!(a2a["url"].as_str().unwrap().starts_with("https://api.example.com/agents/"));
+    assert!(a2a["url"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://api.example.com/agents/"));
     assert_eq!(a2a["provider"]["organization"], "ops@example.com");
     assert_eq!(a2a["skills"].as_array().unwrap().len(), 3);
     assert_eq!(a2a["authentication"]["crypto_scheme"], "hybrid");
@@ -312,12 +395,18 @@ fn test_audit_shows_entries() {
     cmd()
         .args([
             "issue",
-            "--name", "auditable-agent",
-            "--owner", "audit@example.com",
-            "--scope", "read",
-            "--ttl", "1h",
-            "--crypto", "ed25519",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "auditable-agent",
+            "--owner",
+            "audit@example.com",
+            "--scope",
+            "read",
+            "--ttl",
+            "1h",
+            "--crypto",
+            "ed25519",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -363,20 +452,25 @@ fn test_pq_attestation_roundtrip() {
     cmd()
         .args([
             "issue",
-            "--name", "pq-tx-agent",
-            "--owner", "pq-wallet@example.com",
-            "--scope", "transfer",
-            "--ttl", "1h",
-            "--crypto", "hybrid",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "pq-tx-agent",
+            "--owner",
+            "pq-wallet@example.com",
+            "--scope",
+            "transfer",
+            "--ttl",
+            "1h",
+            "--crypto",
+            "hybrid",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
 
     // Read card and verify it has PQ key material
-    let card: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(out.join("agent-card.json")).unwrap()
-    ).unwrap();
+    let card: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("agent-card.json")).unwrap()).unwrap();
     assert_eq!(card["crypto_scheme"], "hybrid");
     assert!(card["pq_public_key"].is_string());
 
@@ -396,12 +490,18 @@ fn test_mldsa_only_rejected_for_wallet() {
     cmd()
         .args([
             "issue",
-            "--name", "mldsa-wallet-agent",
-            "--owner", "quantum@example.com",
-            "--scope", "transfer",
-            "--ttl", "1h",
-            "--crypto", "ml-dsa-65",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "mldsa-wallet-agent",
+            "--owner",
+            "quantum@example.com",
+            "--scope",
+            "transfer",
+            "--ttl",
+            "1h",
+            "--crypto",
+            "ml-dsa-65",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success();
@@ -409,16 +509,24 @@ fn test_mldsa_only_rejected_for_wallet() {
     // Wallet send should fail: ML-DSA-65 only can't produce Ed25519 for IOTA
     cmd()
         .args([
-            "wallet", "send",
-            "--agent-card", out.join("agent-card.json").to_str().unwrap(),
-            "--key", out.join("agent-key.pem").to_str().unwrap(),
-            "--to", "0x0000000000000000000000000000000000000000000000000000000000000000",
-            "--amount", "1.0",
-            "--network", "testnet",
+            "wallet",
+            "send",
+            "--agent-card",
+            out.join("agent-card.json").to_str().unwrap(),
+            "--key",
+            out.join("agent-key.pem").to_str().unwrap(),
+            "--to",
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "--amount",
+            "1.0",
+            "--network",
+            "testnet",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("ML-DSA-65 only identity cannot sign IOTA transactions"));
+        .stderr(predicate::str::contains(
+            "ML-DSA-65 only identity cannot sign IOTA transactions",
+        ));
 }
 
 // ─── ML-DSA-65 only ─────────────────────────────────────────────────────
@@ -432,25 +540,34 @@ fn test_issue_verify_mldsa65() {
     cmd()
         .args([
             "issue",
-            "--name", "pq-only-agent",
-            "--owner", "quantum@example.com",
-            "--scope", "read",
-            "--ttl", "1h",
-            "--crypto", "ml-dsa-65",
-            "-o", out.to_str().unwrap(),
+            "--name",
+            "pq-only-agent",
+            "--owner",
+            "quantum@example.com",
+            "--scope",
+            "read",
+            "--ttl",
+            "1h",
+            "--crypto",
+            "ml-dsa-65",
+            "-o",
+            out.to_str().unwrap(),
         ])
         .assert()
         .success()
         .stdout(predicate::str::contains("ml-dsa-65"));
 
-    let card: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(out.join("agent-card.json")).unwrap()
-    ).unwrap();
+    let card: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("agent-card.json")).unwrap()).unwrap();
     assert_eq!(card["crypto_scheme"], "ml-dsa-65");
     assert!(card["pq_public_key"].is_string());
 
     cmd()
-        .args(["verify", "--agent-card", out.join("agent-card.json").to_str().unwrap()])
+        .args([
+            "verify",
+            "--agent-card",
+            out.join("agent-card.json").to_str().unwrap(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("ML-DSA-65: ✅ VALID"));

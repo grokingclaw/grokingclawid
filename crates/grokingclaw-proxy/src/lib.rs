@@ -7,7 +7,7 @@
 //! This is the piece that makes ANY agent GrokingClawID-compliant
 //! without changing a single line of their code.
 
-pub mod scope;
-pub mod signer;
 pub mod audit;
+pub mod scope;
 pub mod server;
+pub mod signer;

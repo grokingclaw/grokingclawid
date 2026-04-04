@@ -170,8 +170,7 @@ pub fn build_signature_base(
     params: &SignatureParams,
 ) -> Result<String> {
     let mut lines = Vec::new();
-    let url = url::Url::parse(&request.url)
-        .context("Invalid request URL")?;
+    let url = url::Url::parse(&request.url).context("Invalid request URL")?;
 
     for component in components {
         let value = match component {
@@ -182,12 +181,12 @@ pub fn build_signature_base(
                     + &url.port().map(|p| format!(":{}", p)).unwrap_or_default()
             }
             Component::Path => url.path().to_string(),
-            Component::Query => {
-                url.query().map(|q| format!("?{}", q)).unwrap_or_default()
-            }
+            Component::Query => url.query().map(|q| format!("?{}", q)).unwrap_or_default(),
             Component::Header(name) => {
                 let lower_name = name.to_lowercase();
-                request.headers.iter()
+                request
+                    .headers
+                    .iter()
                     .find(|(k, _)| k.to_lowercase() == lower_name)
                     .map(|(_, v)| v.clone())
                     .unwrap_or_default()
@@ -197,9 +196,7 @@ pub fn build_signature_base(
     }
 
     // Build @signature-params line
-    let component_ids: Vec<String> = components.iter()
-        .map(|c| c.identifier())
-        .collect();
+    let component_ids: Vec<String> = components.iter().map(|c| c.identifier()).collect();
     let mut sig_params = format!("({})", component_ids.join(" "));
 
     // Append parameters
@@ -237,9 +234,7 @@ pub fn sign_request(
     let sig_b64 = BASE64.encode(signature.to_bytes());
 
     // Build Signature-Input header
-    let component_ids: Vec<String> = components.iter()
-        .map(|c| c.identifier())
-        .collect();
+    let component_ids: Vec<String> = components.iter().map(|c| c.identifier()).collect();
     let mut sig_input = format!("{}=({})", params.label, component_ids.join(" "));
     sig_input.push_str(&format!(";keyid=\"{}\"", params.keyid));
     sig_input.push_str(&format!(";alg=\"{}\"", params.alg.as_str()));
@@ -286,9 +281,7 @@ pub fn sign_request_hybrid(
     let pq_sig_b64 = crypto::mldsa_sign(mldsa_secret_key, sig_base.as_bytes())?;
 
     // Build Signature-Input header
-    let component_ids: Vec<String> = components.iter()
-        .map(|c| c.identifier())
-        .collect();
+    let component_ids: Vec<String> = components.iter().map(|c| c.identifier()).collect();
     let mut sig_input = format!("{}=({})", params.label, component_ids.join(" "));
     sig_input.push_str(&format!(";keyid=\"{}\"", params.keyid));
     sig_input.push_str(&format!(";alg=\"{}\"", params.alg.as_str()));
@@ -319,13 +312,16 @@ pub fn parse_signature_input(input: &str) -> Result<(Vec<Component>, SignaturePa
     let input = input.trim();
 
     // Split label from rest
-    let (label, rest) = input.split_once('=')
+    let (label, rest) = input
+        .split_once('=')
         .context("Invalid Signature-Input: missing '='")?;
 
     // Extract component list inside parentheses
-    let paren_start = rest.find('(')
+    let paren_start = rest
+        .find('(')
         .context("Invalid Signature-Input: missing '('")?;
-    let paren_end = rest.find(')')
+    let paren_end = rest
+        .find(')')
         .context("Invalid Signature-Input: missing ')'")?;
     let components_str = &rest[paren_start + 1..paren_end];
 
@@ -387,10 +383,12 @@ pub fn parse_signature_input(input: &str) -> Result<(Vec<Component>, SignaturePa
 /// Parse a Signature header to extract the raw signature bytes.
 pub fn parse_signature(header: &str) -> Result<(String, Vec<u8>)> {
     // Parse: sig1=:BASE64:
-    let (label, rest) = header.split_once('=')
+    let (label, rest) = header
+        .split_once('=')
         .context("Invalid Signature header: missing '='")?;
     let sig_b64 = rest.trim_matches(':');
-    let sig_bytes = BASE64.decode(sig_b64)
+    let sig_bytes = BASE64
+        .decode(sig_b64)
         .context("Invalid Signature header: bad base64")?;
     Ok((label.to_string(), sig_bytes))
 }
@@ -409,17 +407,22 @@ pub fn verify_request(
     let sig_base = build_signature_base(request, &components, &params)?;
 
     // Verify Ed25519
-    let pub_bytes = BASE64.decode(ed_public_key_b64)
+    let pub_bytes = BASE64
+        .decode(ed_public_key_b64)
         .context("Invalid public key base64")?;
-    let pub_array: [u8; 32] = pub_bytes.try_into()
+    let pub_array: [u8; 32] = pub_bytes
+        .try_into()
         .map_err(|_| anyhow::anyhow!("Public key must be 32 bytes"))?;
-    let verifying_key = VerifyingKey::from_bytes(&pub_array)
-        .context("Invalid Ed25519 public key")?;
-    let sig_array: [u8; 64] = sig_bytes.try_into()
+    let verifying_key =
+        VerifyingKey::from_bytes(&pub_array).context("Invalid Ed25519 public key")?;
+    let sig_array: [u8; 64] = sig_bytes
+        .try_into()
         .map_err(|_| anyhow::anyhow!("Signature must be 64 bytes"))?;
     let ed_signature = ed25519_dalek::Signature::from_bytes(&sig_array);
 
-    let ed_valid = verifying_key.verify(sig_base.as_bytes(), &ed_signature).is_ok();
+    let ed_valid = verifying_key
+        .verify(sig_base.as_bytes(), &ed_signature)
+        .is_ok();
 
     // Check expiration
     let now = Utc::now().timestamp();
@@ -453,11 +456,7 @@ pub fn verify_request_hybrid(
     let (_, pq_sig_bytes) = parse_signature(pq_signature)?;
     let pq_sig_b64 = BASE64.encode(&pq_sig_bytes);
 
-    let pq_valid = crypto::mldsa_verify(
-        mldsa_public_key_b64,
-        sig_base.as_bytes(),
-        &pq_sig_b64,
-    )?;
+    let pq_valid = crypto::mldsa_verify(mldsa_public_key_b64, sig_base.as_bytes(), &pq_sig_b64)?;
 
     result.mldsa65_valid = Some(pq_valid);
     result.alg = "ed25519+ml-dsa-65".to_string();
@@ -487,12 +486,17 @@ pub fn sign_ws_upgrade(
     let authority = format!(
         "{}{}",
         parsed_url.host_str().unwrap_or(""),
-        parsed_url.port().map(|p| format!(":{}", p)).unwrap_or_default()
+        parsed_url
+            .port()
+            .map(|p| format!(":{}", p))
+            .unwrap_or_default()
     );
 
     let request = HttpRequest {
         method: "GET".to_string(),
-        url: url.replace("wss://", "https://").replace("ws://", "http://"),
+        url: url
+            .replace("wss://", "https://")
+            .replace("ws://", "http://"),
         headers: vec![
             ("host".to_string(), authority),
             ("upgrade".to_string(), "websocket".to_string()),
@@ -536,7 +540,10 @@ pub fn sign_ws_upgrade(
 /// HTTP upgrade request headers.
 pub fn signed_headers(signed: &SignedRequest) -> Vec<(String, String)> {
     let mut headers = vec![
-        ("Signature-Input".to_string(), signed.signature_input.clone()),
+        (
+            "Signature-Input".to_string(),
+            signed.signature_input.clone(),
+        ),
         ("Signature".to_string(), signed.signature.clone()),
     ];
     if let Some(ref pq_sig) = signed.pq_signature {
@@ -628,7 +635,9 @@ pub fn verify_ws_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{generate_keypair, encode_public_key, generate_hybrid_keypair, encode_mldsa_public_key};
+    use crate::crypto::{
+        encode_mldsa_public_key, encode_public_key, generate_hybrid_keypair, generate_keypair,
+    };
 
     #[test]
     fn test_sign_verify_ed25519_roundtrip() {
@@ -640,7 +649,10 @@ mod tests {
             url: "https://api.example.com/agents/status".to_string(),
             headers: vec![
                 ("host".to_string(), "api.example.com".to_string()),
-                ("date".to_string(), "Thu, 26 Mar 2026 00:00:00 GMT".to_string()),
+                (
+                    "date".to_string(),
+                    "Thu, 26 Mar 2026 00:00:00 GMT".to_string(),
+                ),
             ],
             body: None,
         };
@@ -670,7 +682,8 @@ mod tests {
             &signed.signature_input,
             &signed.signature,
             &pub_b64,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(result.ed25519_valid);
         assert_eq!(result.keyid, "test-agent-key-1");
@@ -711,9 +724,13 @@ mod tests {
         };
 
         let signed = sign_request_hybrid(
-            request, &components, &params,
-            &hkp.ed25519_signing, &hkp.mldsa_secret,
-        ).unwrap();
+            request,
+            &components,
+            &params,
+            &hkp.ed25519_signing,
+            &hkp.mldsa_secret,
+        )
+        .unwrap();
 
         assert!(signed.pq_signature.is_some());
 
@@ -725,7 +742,8 @@ mod tests {
             signed.pq_signature.as_ref().unwrap(),
             &ed_pub,
             &pq_pub,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(result.ed25519_valid);
         assert_eq!(result.mldsa65_valid, Some(true));
@@ -761,7 +779,8 @@ mod tests {
             &signed.signature_input,
             &signed.signature,
             &pub_b64,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(!result.ed25519_valid);
     }
@@ -775,7 +794,8 @@ mod tests {
             "agent-key-1",
             &sk,
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(signed.signature_input.contains("ws-auth"));
         assert!(signed.signature_input.contains("\"upgrade\""));
@@ -795,7 +815,8 @@ mod tests {
             "hybrid-agent",
             &hkp.ed25519_signing,
             Some(&hkp.mldsa_secret),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(signed.signature_input.contains("ed25519+ml-dsa-65"));
         assert!(signed.pq_signature.is_some());
@@ -815,7 +836,8 @@ mod tests {
             "agent-key",
             &sk,
             None,
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(verify_ws_message(&signed_msg, &pub_b64, None).unwrap());
     }
@@ -832,7 +854,8 @@ mod tests {
             "hybrid-agent",
             &hkp.ed25519_signing,
             Some(&hkp.mldsa_secret),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert!(signed_msg.pq_signature.is_some());
         assert!(verify_ws_message(&signed_msg, &ed_pub, Some(&pq_pub)).unwrap());
@@ -843,13 +866,8 @@ mod tests {
         let (sk, vk) = generate_keypair();
         let pub_b64 = encode_public_key(&vk);
 
-        let mut signed_msg = sign_ws_message(
-            "original payload",
-            1,
-            "agent-key",
-            &sk,
-            None,
-        ).unwrap();
+        let mut signed_msg =
+            sign_ws_message("original payload", 1, "agent-key", &sk, None).unwrap();
 
         // Tamper
         signed_msg.payload = "tampered payload".to_string();

@@ -130,10 +130,7 @@ impl UpdateChecker {
             None => return Ok(None),
         };
 
-        let url = format!(
-            "{}/v1/daemon/latest",
-            registry_url.trim_end_matches('/')
-        );
+        let url = format!("{}/v1/daemon/latest", registry_url.trim_end_matches('/'));
 
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
@@ -233,7 +230,9 @@ impl UpdateChecker {
     /// Apply available template updates (minor/patch only).
     pub async fn apply_template_updates(&self) -> Result<Vec<String>> {
         let state = self.state.read().await;
-        let template_updates: Vec<&UpdateInfo> = state.available_updates.iter()
+        let template_updates: Vec<&UpdateInfo> = state
+            .available_updates
+            .iter()
             .filter(|u| matches!(u.kind, UpdateKind::Template) && !u.is_major)
             .collect();
 
@@ -244,7 +243,11 @@ impl UpdateChecker {
         let mut applied = Vec::new();
 
         for update in template_updates {
-            match self.templates.install_template(&update.name, &update.latest_version).await {
+            match self
+                .templates
+                .install_template(&update.name, &update.latest_version)
+                .await
+            {
                 Ok(()) => {
                     tracing::info!(
                         template = %update.name,
@@ -252,7 +255,10 @@ impl UpdateChecker {
                         to = %update.latest_version,
                         "Template updated"
                     );
-                    applied.push(format!("{}: {} → {}", update.name, update.current_version, update.latest_version));
+                    applied.push(format!(
+                        "{}: {} → {}",
+                        update.name, update.current_version, update.latest_version
+                    ));
                 }
                 Err(e) => {
                     tracing::error!(
@@ -269,9 +275,8 @@ impl UpdateChecker {
 
     /// Run the background update check loop.
     pub async fn run_loop(self: Arc<Self>, mut shutdown: tokio::sync::watch::Receiver<bool>) {
-        let interval = std::time::Duration::from_secs(
-            self.config.updates.check_interval_minutes as u64 * 60
-        );
+        let interval =
+            std::time::Duration::from_secs(self.config.updates.check_interval_minutes as u64 * 60);
 
         loop {
             tokio::select! {
@@ -315,7 +320,10 @@ impl UpdateChecker {
 /// Check if version B is a major update from version A.
 /// Simple semver major version comparison.
 fn is_major_update(current: &str, latest: &str) -> bool {
-    let current_major = current.split('.').next().and_then(|v| v.parse::<u32>().ok());
+    let current_major = current
+        .split('.')
+        .next()
+        .and_then(|v| v.parse::<u32>().ok());
     let latest_major = latest.split('.').next().and_then(|v| v.parse::<u32>().ok());
 
     match (current_major, latest_major) {

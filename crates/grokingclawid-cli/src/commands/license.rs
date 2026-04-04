@@ -79,10 +79,16 @@ pub fn execute_activate(key: &str) -> Result<()> {
     }
 
     if !state.limits.features.is_empty() {
-        println!("  Features: {}", state.limits.features.iter()
-            .map(|f| f.to_string())
-            .collect::<Vec<_>>()
-            .join(", "));
+        println!(
+            "  Features: {}",
+            state
+                .limits
+                .features
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     Ok(())

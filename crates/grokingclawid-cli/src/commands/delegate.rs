@@ -11,8 +11,8 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use grokingclawid_core::audit;
 use crate::commands::issue::parse_ttl;
+use grokingclawid_core::audit;
 use grokingclawid_core::crypto;
 use grokingclawid_core::models::{AgentCard, CryptoScheme, DelegationToken};
 
@@ -74,7 +74,17 @@ pub fn execute(
             if derived_pub != parent_card.public_key {
                 bail!("Private key does not match the public key in the agent card");
             }
-            let token = build_token(id, parent_card.id, to_name, &requested_scopes, now, expires_at, "", None, &CryptoScheme::Ed25519);
+            let token = build_token(
+                id,
+                parent_card.id,
+                to_name,
+                &requested_scopes,
+                now,
+                expires_at,
+                "",
+                None,
+                &CryptoScheme::Ed25519,
+            );
             let payload = token_signing_payload(&token)?;
             let sig = crypto::sign(&ed_key, payload.as_bytes());
             (sig, None, ed_key)
@@ -86,7 +96,17 @@ pub fn execute(
             if derived_pub != parent_card.public_key {
                 bail!("Private key does not match the public key in the agent card");
             }
-            let token = build_token(id, parent_card.id, to_name, &requested_scopes, now, expires_at, "", None, &parent_card.crypto_scheme);
+            let token = build_token(
+                id,
+                parent_card.id,
+                to_name,
+                &requested_scopes,
+                now,
+                expires_at,
+                "",
+                None,
+                &parent_card.crypto_scheme,
+            );
             let payload = token_signing_payload(&token)?;
             let ed_sig = crypto::sign(&ed_key, payload.as_bytes());
             let pq_sig = crypto::mldsa_sign(&mldsa_key, payload.as_bytes())?;
@@ -107,8 +127,12 @@ pub fn execute(
     };
 
     // Write output
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
 
     let token_path = output_dir.join("delegation-token.json");
     let token_json =
@@ -119,7 +143,13 @@ pub fn execute(
     // Record in audit log
     let conn = audit::open_db()?;
     let target_desc = format!("delegate:{}", to_name);
-    audit::record_entry(&conn, &parent_card.id, "delegate", &target_desc, &ed_signing_key)?;
+    audit::record_entry(
+        &conn,
+        &parent_card.id,
+        "delegate",
+        &target_desc,
+        &ed_signing_key,
+    )?;
 
     // Print summary
     println!("✅ Delegation token created successfully!");

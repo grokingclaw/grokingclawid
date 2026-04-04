@@ -7,12 +7,12 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
+use base64::Engine;
+use grokingclawid_core::audit;
 use grokingclawid_core::crypto;
 use grokingclawid_core::iota::{self, IotaClient};
-use grokingclawid_core::ws::{self, IotaWsClient, EventFilter};
 use grokingclawid_core::models::{AgentCard, CryptoScheme, PqAttestation, WalletReceipt};
-use grokingclawid_core::audit;
-use base64::Engine;
+use grokingclawid_core::ws::{self, EventFilter, IotaWsClient};
 
 /// Execute `wallet init` — derive IOTA address from agent card.
 pub fn execute_init(card_path: &Path) -> Result<()> {
@@ -77,7 +77,10 @@ pub fn execute_faucet(card_path: &Path, network: &str) -> Result<()> {
     println!("  Response: {}", truncate(&response, 200));
     println!();
     println!("  Tokens may take a few seconds to arrive.");
-    println!("  Check with: grokingclawid wallet balance --agent-card {}", card_path.display());
+    println!(
+        "  Check with: grokingclawid wallet balance --agent-card {}",
+        card_path.display()
+    );
 
     Ok(())
 }
@@ -103,10 +106,21 @@ pub fn execute_coins(card_path: &Path, network: &str) -> Result<()> {
         } else {
             for (i, coin) in data.iter().enumerate() {
                 let balance = coin.get("balance").and_then(|b| b.as_str()).unwrap_or("0");
-                let coin_type = coin.get("coinType").and_then(|t| t.as_str()).unwrap_or("unknown");
-                let object_id = coin.get("coinObjectId").and_then(|o| o.as_str()).unwrap_or("?");
-                println!("  [{}] {} nanos | type: {} | id: {}...",
-                    i + 1, balance, coin_type, truncate(object_id, 20));
+                let coin_type = coin
+                    .get("coinType")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("unknown");
+                let object_id = coin
+                    .get("coinObjectId")
+                    .and_then(|o| o.as_str())
+                    .unwrap_or("?");
+                println!(
+                    "  [{}] {} nanos | type: {} | id: {}...",
+                    i + 1,
+                    balance,
+                    coin_type,
+                    truncate(object_id, 20)
+                );
             }
         }
     } else {
@@ -136,12 +150,10 @@ pub fn execute_send(
 
     // Parse amount — support both raw nanos and IOTA decimal
     let amount_nanos: u64 = if amount_str.contains('.') {
-        let iota_amount: f64 = amount_str.parse()
-            .context("Invalid IOTA amount")?;
+        let iota_amount: f64 = amount_str.parse().context("Invalid IOTA amount")?;
         (iota_amount * 1_000_000_000.0) as u64
     } else {
-        amount_str.parse()
-            .context("Invalid amount in nanos")?
+        amount_str.parse().context("Invalid amount in nanos")?
     };
 
     // Load signing keys
@@ -167,9 +179,12 @@ pub fn execute_send(
         }
         CryptoScheme::Hybrid => {
             let (ed, mldsa_sk) = crypto::decode_hybrid_private_key_pem(&key_pem)?;
-            let mldsa_pk = card.pq_public_key.as_ref()
+            let mldsa_pk = card
+                .pq_public_key
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Hybrid card missing pq_public_key"))?;
-            let pk_bytes = base64::engine::general_purpose::STANDARD.decode(mldsa_pk)
+            let pk_bytes = base64::engine::general_purpose::STANDARD
+                .decode(mldsa_pk)
                 .context("Failed to decode ML-DSA-65 public key")?;
             (ed, Some(mldsa_sk), Some(pk_bytes))
         }
@@ -183,7 +198,10 @@ pub fn execute_send(
     println!("💸 Sending IOTA...");
     println!("  From:      {}", sender);
     println!("  To:        {}", recipient);
-    println!("  Amount:    {:.9} IOTA ({} nanos)", display_amount, amount_nanos);
+    println!(
+        "  Amount:    {:.9} IOTA ({} nanos)",
+        display_amount, amount_nanos
+    );
     println!("  Gas:       {} nanos", gas_budget);
     println!("  Network:   {}", network);
     println!("  Crypto:    {}", card.crypto_scheme);
@@ -194,22 +212,30 @@ pub fn execute_send(
 
     let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
 
-    let (digest, pq_attestation) = if let (Some(mldsa_sk), Some(mldsa_pk)) = (&mldsa_secret, &mldsa_public) {
-        // PQ-native path: dual sign
-        let (digest, attestation) = rt.block_on(
-            client.transfer_iota_pq(
-                &ed_key, mldsa_sk, mldsa_pk,
-                &sender, recipient, amount_nanos, gas_budget,
-            )
-        )?;
-        (digest, Some(attestation))
-    } else {
-        // Classical Ed25519-only path
-        let digest = rt.block_on(
-            client.transfer_iota(&ed_key, &sender, recipient, amount_nanos, gas_budget)
-        )?;
-        (digest, None)
-    };
+    let (digest, pq_attestation) =
+        if let (Some(mldsa_sk), Some(mldsa_pk)) = (&mldsa_secret, &mldsa_public) {
+            // PQ-native path: dual sign
+            let (digest, attestation) = rt.block_on(client.transfer_iota_pq(
+                &ed_key,
+                mldsa_sk,
+                mldsa_pk,
+                &sender,
+                recipient,
+                amount_nanos,
+                gas_budget,
+            ))?;
+            (digest, Some(attestation))
+        } else {
+            // Classical Ed25519-only path
+            let digest = rt.block_on(client.transfer_iota(
+                &ed_key,
+                &sender,
+                recipient,
+                amount_nanos,
+                gas_budget,
+            ))?;
+            (digest, None)
+        };
 
     println!("  ✅ Transaction executed!");
     println!("  Digest: {}", digest);
@@ -217,7 +243,10 @@ pub fn execute_send(
         println!("  🛡️  ML-DSA-65 attestation: SIGNED");
     }
     println!();
-    println!("  View on explorer: https://explorer.iota.cafe/txblock/{}?network={}", digest, network);
+    println!(
+        "  View on explorer: https://explorer.iota.cafe/txblock/{}?network={}",
+        digest, network
+    );
 
     // Build receipt
     let receipt = WalletReceipt {
@@ -239,9 +268,12 @@ pub fn execute_send(
     };
 
     // Save receipt alongside agent card
-    let receipt_path = card_path.parent().unwrap_or(Path::new(".")).join("wallet-receipt.json");
-    let receipt_json = serde_json::to_string_pretty(&receipt)
-        .context("Failed to serialize receipt")?;
+    let receipt_path = card_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("wallet-receipt.json");
+    let receipt_json =
+        serde_json::to_string_pretty(&receipt).context("Failed to serialize receipt")?;
     fs::write(&receipt_path, &receipt_json)
         .with_context(|| format!("Failed to write receipt: {}", receipt_path.display()))?;
     println!("  📄 Receipt saved: {}", receipt_path.display());
@@ -254,8 +286,11 @@ pub fn execute_send(
     if let Ok(conn) = audit::open_db() {
         match audit::record_entry(&conn, &card.id, "wallet_transfer", &audit_target, &ed_key) {
             Ok(entry) => {
-                println!("  🔗 Audit logged: chain #{} (hash: {}...)",
-                    entry.id, &entry.entry_hash[..16]);
+                println!(
+                    "  🔗 Audit logged: chain #{} (hash: {}...)",
+                    entry.id,
+                    &entry.entry_hash[..16]
+                );
             }
             Err(e) => {
                 eprintln!("  ⚠️  Audit log warning: {}", e);
@@ -308,16 +343,14 @@ pub fn execute_watch(card_path: &Path, network: &str, limit: u32) -> Result<()> 
 
     rt.block_on(ws_client.watch_address(&address, |event, direction| {
         count += 1;
-        let arrow = if direction == "incoming" { "⬅️  IN " } else { "➡️  OUT" };
-        let timestamp = event.timestamp_ms
-            .as_deref()
-            .unwrap_or("?");
-        let event_type = event.event_type
-            .as_deref()
-            .unwrap_or("unknown");
-        let sender = event.sender
-            .as_deref()
-            .unwrap_or("?");
+        let arrow = if direction == "incoming" {
+            "⬅️  IN "
+        } else {
+            "➡️  OUT"
+        };
+        let timestamp = event.timestamp_ms.as_deref().unwrap_or("?");
+        let event_type = event.event_type.as_deref().unwrap_or("unknown");
+        let sender = event.sender.as_deref().unwrap_or("?");
 
         println!("  {} [#{}] {}", arrow, count, event_type);
         println!("       Sender:    {}", sender);
@@ -369,14 +402,17 @@ pub fn execute_events(card_path: &Path, network: &str, limit: u32) -> Result<()>
         println!("   transfers may not produce queryable events.)");
     } else {
         for (i, event) in events.iter().enumerate() {
-            let event_type = event.get("type")
+            let event_type = event
+                .get("type")
                 .and_then(|t| t.as_str())
                 .unwrap_or("unknown");
-            let tx_digest = event.get("id")
+            let tx_digest = event
+                .get("id")
                 .and_then(|id| id.get("txDigest"))
                 .and_then(|d| d.as_str())
                 .unwrap_or("?");
-            let timestamp = event.get("timestampMs")
+            let timestamp = event
+                .get("timestampMs")
                 .and_then(|t| t.as_str())
                 .unwrap_or("?");
 

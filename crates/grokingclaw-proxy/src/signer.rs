@@ -83,7 +83,9 @@ impl RequestSigner {
         ];
 
         // Add date if not already present
-        let has_date = existing_headers.iter().any(|(k, _)| k.to_lowercase() == "date");
+        let has_date = existing_headers
+            .iter()
+            .any(|(k, _)| k.to_lowercase() == "date");
         if !has_date {
             headers.push(("Date".to_string(), now.to_rfc2822()));
         }
@@ -130,11 +132,9 @@ mod tests {
     #[test]
     fn test_sign_request_produces_headers() {
         let signer = create_test_signer();
-        let headers = signer.sign_request(
-            "GET",
-            "https://api.openai.com/v1/chat/completions",
-            &[],
-        ).unwrap();
+        let headers = signer
+            .sign_request("GET", "https://api.openai.com/v1/chat/completions", &[])
+            .unwrap();
 
         // Should produce Signature-Input, Signature, X-ClawID-Agent, Date
         assert!(headers.len() >= 3);
@@ -148,7 +148,9 @@ mod tests {
     #[test]
     fn test_sign_request_agent_id() {
         let signer = create_test_signer();
-        let headers = signer.sign_request("POST", "https://example.com", &[]).unwrap();
+        let headers = signer
+            .sign_request("POST", "https://example.com", &[])
+            .unwrap();
         let agent_header = headers.iter().find(|(k, _)| k == "X-ClawID-Agent").unwrap();
         assert_eq!(agent_header.1, "test-agent-123");
     }

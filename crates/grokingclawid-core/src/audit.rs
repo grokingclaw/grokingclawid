@@ -158,7 +158,9 @@ pub fn query_entries(
 
     sql.push_str(" ORDER BY id ASC");
 
-    let mut stmt = conn.prepare(&sql).context("Failed to prepare audit query")?;
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Failed to prepare audit query")?;
 
     // Build dynamic parameter references
     let params: Vec<&dyn rusqlite::types::ToSql> = bind_values

@@ -233,9 +233,7 @@ impl Default for MeshSection {
 
 impl Default for RegistrySection {
     fn default() -> Self {
-        Self {
-            url: None,
-        }
+        Self { url: None }
     }
 }
 

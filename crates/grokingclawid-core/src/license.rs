@@ -27,9 +27,8 @@ pub const GROKINGCLAW_LICENSE_PUBLIC_KEY: &str = "DrxEgwQ+E6iuwcW4aXtPc1myPvMsMg
 
 /// Raw bytes of the license verification public key.
 pub const GROKINGCLAW_LICENSE_PUBLIC_KEY_BYTES: [u8; 32] = [
-    0x0e, 0xbc, 0x44, 0x83, 0x04, 0x3e, 0x13, 0xa8, 0xae, 0xc1, 0xc5, 0xb8,
-    0x69, 0x7b, 0x4f, 0x73, 0x59, 0xb2, 0x3e, 0xf3, 0x2c, 0x32, 0x0d, 0x4b,
-    0x1b, 0xf1, 0x89, 0x6c, 0x18, 0x4b, 0xcf, 0x4e,
+    0x0e, 0xbc, 0x44, 0x83, 0x04, 0x3e, 0x13, 0xa8, 0xae, 0xc1, 0xc5, 0xb8, 0x69, 0x7b, 0x4f, 0x73,
+    0x59, 0xb2, 0x3e, 0xf3, 0x2c, 0x32, 0x0d, 0x4b, 0x1b, 0xf1, 0x89, 0x6c, 0x18, 0x4b, 0xcf, 0x4e,
 ];
 
 // ─── License Tiers ──────────────────────────────────────────────────────
@@ -299,14 +298,15 @@ pub fn validate_license_key(license: &LicenseFile) -> Result<()> {
         issued_at: license.issued_at,
     };
 
-    let payload_json = serde_json::to_string(&payload)
-        .context("Failed to serialize license payload")?;
+    let payload_json =
+        serde_json::to_string(&payload).context("Failed to serialize license payload")?;
 
     let valid = crypto::verify(
         GROKINGCLAW_LICENSE_PUBLIC_KEY,
         payload_json.as_bytes(),
         &license.license_key,
-    ).context("Failed to verify license signature")?;
+    )
+    .context("Failed to verify license signature")?;
 
     if !valid {
         anyhow::bail!("Invalid license key — signature verification failed");
@@ -426,12 +426,13 @@ pub fn activate_license(key: &str) -> Result<LicenseState> {
     let signature_b64 = parts[1];
 
     // Decode payload
-    let payload_json = BASE64.decode(payload_b64)
+    let payload_json = BASE64
+        .decode(payload_b64)
         .context("Invalid license key — failed to decode payload")?;
     let payload_str = String::from_utf8(payload_json)
         .context("Invalid license key — payload is not valid UTF-8")?;
-    let payload: LicensePayload = serde_json::from_str(&payload_str)
-        .context("Invalid license key — payload format error")?;
+    let payload: LicensePayload =
+        serde_json::from_str(&payload_str).context("Invalid license key — payload format error")?;
 
     // Build license file
     let license = LicenseFile {
@@ -448,11 +449,9 @@ pub fn activate_license(key: &str) -> Result<LicenseState> {
     // Save to disk
     let path = license_file_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .context("Failed to create license directory")?;
+        std::fs::create_dir_all(parent).context("Failed to create license directory")?;
     }
-    let json = serde_json::to_string_pretty(&license)
-        .context("Failed to serialize license")?;
+    let json = serde_json::to_string_pretty(&license).context("Failed to serialize license")?;
     std::fs::write(&path, &json)
         .with_context(|| format!("Failed to write license file: {}", path.display()))?;
 
@@ -601,7 +600,8 @@ mod tests {
             &pub_b64,
             payload_check_json.as_bytes(),
             &license.license_key,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(valid);
     }
 
@@ -615,7 +615,10 @@ mod tests {
         assert_eq!("free".parse::<LicenseTier>().unwrap(), LicenseTier::Free);
         assert_eq!("indie".parse::<LicenseTier>().unwrap(), LicenseTier::Indie);
         assert_eq!("team".parse::<LicenseTier>().unwrap(), LicenseTier::Team);
-        assert_eq!("enterprise".parse::<LicenseTier>().unwrap(), LicenseTier::Enterprise);
+        assert_eq!(
+            "enterprise".parse::<LicenseTier>().unwrap(),
+            LicenseTier::Enterprise
+        );
         assert!("invalid".parse::<LicenseTier>().is_err());
     }
 

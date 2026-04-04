@@ -8,12 +8,12 @@
 //! - RFC 9421 HTTP message signatures
 //! - IOTA wallet integration (feature-gated)
 
-pub mod crypto;
-pub mod license;
-pub mod models;
 pub mod audit;
 pub mod challenge;
+pub mod crypto;
 pub mod httpsig;
+pub mod license;
+pub mod models;
 pub mod revocation;
 
 #[cfg(feature = "wallet")]

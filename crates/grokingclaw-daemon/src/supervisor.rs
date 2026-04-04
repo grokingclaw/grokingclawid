@@ -191,8 +191,8 @@ impl Supervisor {
         }
 
         let mut agents = self.agents.write().await;
-        let entries = std::fs::read_dir(&self.agents_dir)
-            .context("Failed to read agents directory")?;
+        let entries =
+            std::fs::read_dir(&self.agents_dir).context("Failed to read agents directory")?;
 
         for entry in entries {
             let entry = entry?;
@@ -204,17 +204,20 @@ impl Supervisor {
                     let config: AgentConfig = toml::from_str(&content)
                         .with_context(|| format!("Failed to parse {}", config_path.display()))?;
                     let name = config.name.clone();
-                    agents.insert(name, AgentProcess {
-                        config,
-                        status: AgentStatus::Stopped,
-                        child: None,
-                        pid: None,
-                        proxy_port: None,
-                        proxy_handle: None,
-                        restart_count: 0,
-                        restart_timestamps: Vec::new(),
-                        started_at: None,
-                    });
+                    agents.insert(
+                        name,
+                        AgentProcess {
+                            config,
+                            status: AgentStatus::Stopped,
+                            child: None,
+                            pid: None,
+                            proxy_port: None,
+                            proxy_handle: None,
+                            restart_count: 0,
+                            restart_timestamps: Vec::new(),
+                            started_at: None,
+                        },
+                    );
                 }
             }
         }
@@ -236,22 +239,25 @@ impl Supervisor {
         std::fs::create_dir_all(agent_dir.join("breadcrumbs"))?;
 
         // Write agent.toml
-        let toml_str = toml::to_string_pretty(&config)
-            .context("Failed to serialize agent config")?;
+        let toml_str =
+            toml::to_string_pretty(&config).context("Failed to serialize agent config")?;
         std::fs::write(agent_dir.join("agent.toml"), &toml_str)?;
 
         let mut agents = self.agents.write().await;
-        agents.insert(name.clone(), AgentProcess {
-            config,
-            status: AgentStatus::Creating,
-            child: None,
-            pid: None,
-            proxy_port: None,
-            proxy_handle: None,
-            restart_count: 0,
-            restart_timestamps: Vec::new(),
-            started_at: None,
-        });
+        agents.insert(
+            name.clone(),
+            AgentProcess {
+                config,
+                status: AgentStatus::Creating,
+                child: None,
+                pid: None,
+                proxy_port: None,
+                proxy_handle: None,
+                restart_count: 0,
+                restart_timestamps: Vec::new(),
+                started_at: None,
+            },
+        );
 
         tracing::info!(agent = %name, "Agent registered");
         Ok(())
@@ -263,11 +269,15 @@ impl Supervisor {
         let run_script = agent_dir.join("run.sh");
 
         if !run_script.exists() {
-            anyhow::bail!("No run.sh found for agent '{}'. Template may not be installed.", name);
+            anyhow::bail!(
+                "No run.sh found for agent '{}'. Template may not be installed.",
+                name
+            );
         }
 
         let mut agents = self.agents.write().await;
-        let agent = agents.get_mut(name)
+        let agent = agents
+            .get_mut(name)
             .context(format!("Agent '{}' not found", name))?;
 
         if agent.status == AgentStatus::Running {
@@ -286,8 +296,8 @@ impl Supervisor {
 
         let key_path = agent_dir.join("identity").join("agent.pem");
         if key_path.exists() {
-            let pem = std::fs::read_to_string(&key_path)
-                .context("Failed to read agent private key")?;
+            let pem =
+                std::fs::read_to_string(&key_path).context("Failed to read agent private key")?;
             let signing_key = grokingclawid_core::crypto::decode_private_key_pem(&pem)
                 .context("Failed to decode agent private key")?;
             let signing_key = Arc::new(signing_key);
@@ -297,10 +307,8 @@ impl Supervisor {
                 agent.config.resources.max_requests_per_minute,
             );
 
-            let signer = RequestSigner::from_pem(
-                &key_path,
-                &agent.config.agent_id.to_string(),
-            ).ok();
+            let signer =
+                RequestSigner::from_pem(&key_path, &agent.config.agent_id.to_string()).ok();
 
             let proxy = ProxyServer::new(
                 scope,
@@ -327,10 +335,10 @@ impl Supervisor {
             );
         }
 
-        let stdout_file = std::fs::File::create(&stdout_log)
-            .context("Failed to create stdout log")?;
-        let stderr_file = std::fs::File::create(&stderr_log)
-            .context("Failed to create stderr log")?;
+        let stdout_file =
+            std::fs::File::create(&stdout_log).context("Failed to create stdout log")?;
+        let stderr_file =
+            std::fs::File::create(&stderr_log).context("Failed to create stderr log")?;
 
         let mut cmd = Command::new("bash");
         cmd.arg(&run_script)
@@ -339,16 +347,19 @@ impl Supervisor {
             .env("CLAWID_AGENT_NAME", &agent.config.name)
             .env("CLAWID_DATA_DIR", &data_dir)
             .env("CLAWID_AUDIT_DB", &audit_db)
-            .env("CLAWID_AGENT_DID", agent.config.did.as_deref().unwrap_or(""));
+            .env(
+                "CLAWID_AGENT_DID",
+                agent.config.did.as_deref().unwrap_or(""),
+            );
 
         // Set proxy env vars if proxy is running
         if let Some(port) = proxy_port {
             let proxy_url = format!("http://127.0.0.1:{}", port);
             cmd.env("HTTP_PROXY", &proxy_url)
-               .env("HTTPS_PROXY", &proxy_url)
-               .env("http_proxy", &proxy_url)
-               .env("https_proxy", &proxy_url)
-               .env("CLAWID_PROXY_PORT", port.to_string());
+                .env("HTTPS_PROXY", &proxy_url)
+                .env("http_proxy", &proxy_url)
+                .env("https_proxy", &proxy_url)
+                .env("CLAWID_PROXY_PORT", port.to_string());
         }
 
         let child = cmd
@@ -373,7 +384,8 @@ impl Supervisor {
     /// Stop an agent gracefully (SIGTERM, then SIGKILL after 10s).
     pub async fn stop_agent(&self, name: &str) -> Result<()> {
         let mut agents = self.agents.write().await;
-        let agent = agents.get_mut(name)
+        let agent = agents
+            .get_mut(name)
             .context(format!("Agent '{}' not found", name))?;
 
         // Stop the sidecar proxy first
@@ -388,13 +400,13 @@ impl Supervisor {
                 // Send SIGTERM for graceful shutdown
                 tracing::info!(agent = %name, pid = pid, "Sending SIGTERM");
                 #[cfg(unix)]
-                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                unsafe {
+                    libc::kill(pid as i32, libc::SIGTERM);
+                }
 
                 // Wait up to 10s for graceful exit
-                let graceful = tokio::time::timeout(
-                    std::time::Duration::from_secs(10),
-                    child.wait(),
-                ).await;
+                let graceful =
+                    tokio::time::timeout(std::time::Duration::from_secs(10), child.wait()).await;
 
                 if graceful.is_err() {
                     // Timeout — force kill
@@ -449,11 +461,13 @@ impl Supervisor {
                             // Check restart budget
                             let now = Utc::now();
                             let window = chrono::Duration::seconds(
-                                agent.config.restart.restart_window_seconds as i64
+                                agent.config.restart.restart_window_seconds as i64,
                             );
                             agent.restart_timestamps.retain(|t| now - *t < window);
 
-                            if agent.restart_timestamps.len() < agent.config.restart.max_restarts as usize {
+                            if agent.restart_timestamps.len()
+                                < agent.config.restart.max_restarts as usize
+                            {
                                 agent.restart_timestamps.push(now);
                                 agent.restart_count += 1;
                                 agent.child = None;
@@ -494,11 +508,14 @@ impl Supervisor {
                     if let Some(ref mut child) = agent.child {
                         if let Some(pid) = child.id() {
                             #[cfg(unix)]
-                            unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                            unsafe {
+                                libc::kill(pid as i32, libc::SIGTERM);
+                            }
                             let graceful = tokio::time::timeout(
                                 std::time::Duration::from_secs(5),
                                 child.wait(),
-                            ).await;
+                            )
+                            .await;
                             if graceful.is_err() {
                                 let _ = child.kill().await;
                             }
@@ -519,7 +536,8 @@ impl Supervisor {
     /// Get all agents that need to be (re)started.
     pub async fn agents_needing_start(&self) -> Vec<String> {
         let agents = self.agents.read().await;
-        agents.iter()
+        agents
+            .iter()
             .filter(|(_, a)| a.status == AgentStatus::Starting)
             .map(|(name, _)| name.clone())
             .collect()
@@ -528,18 +546,21 @@ impl Supervisor {
     /// List all agents with their current state.
     pub async fn list_agents(&self) -> Vec<AgentInfo> {
         let agents = self.agents.read().await;
-        agents.values().map(|a| AgentInfo {
-            name: a.config.name.clone(),
-            agent_id: a.config.agent_id,
-            did: a.config.did.clone(),
-            template: a.config.template.clone(),
-            status: a.status,
-            pid: a.pid,
-            created_at: a.config.created_at,
-            started_at: a.started_at,
-            restart_count: a.restart_count,
-            allowed_scopes: a.config.allowed_scopes.clone(),
-        }).collect()
+        agents
+            .values()
+            .map(|a| AgentInfo {
+                name: a.config.name.clone(),
+                agent_id: a.config.agent_id,
+                did: a.config.did.clone(),
+                template: a.config.template.clone(),
+                status: a.status,
+                pid: a.pid,
+                created_at: a.config.created_at,
+                started_at: a.started_at,
+                restart_count: a.restart_count,
+                allowed_scopes: a.config.allowed_scopes.clone(),
+            })
+            .collect()
     }
 
     /// Get a single agent's info.
@@ -565,8 +586,9 @@ impl Supervisor {
 
         let agent_dir = self.agents_dir.join(name);
         if agent_dir.exists() {
-            std::fs::remove_dir_all(&agent_dir)
-                .with_context(|| format!("Failed to delete agent directory: {}", agent_dir.display()))?;
+            std::fs::remove_dir_all(&agent_dir).with_context(|| {
+                format!("Failed to delete agent directory: {}", agent_dir.display())
+            })?;
         }
 
         let mut agents = self.agents.write().await;

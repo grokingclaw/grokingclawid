@@ -132,13 +132,11 @@ pub fn mldsa_verify(public_key_b64: &str, message: &[u8], signature_b64: &str) -
         .decode(signature_b64)
         .context("Failed to decode ML-DSA signature from base64")?;
 
-    let pk = ml_dsa_65::PublicKey::try_from_bytes(
-        pk_bytes
-            .as_slice()
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("ML-DSA-65 public key has wrong length (expected 1952 bytes)"))?,
-    )
-    .map_err(|e| anyhow::anyhow!("Invalid ML-DSA-65 public key: {:?}", e))?;
+    let pk =
+        ml_dsa_65::PublicKey::try_from_bytes(pk_bytes.as_slice().try_into().map_err(|_| {
+            anyhow::anyhow!("ML-DSA-65 public key has wrong length (expected 1952 bytes)")
+        })?)
+        .map_err(|e| anyhow::anyhow!("Invalid ML-DSA-65 public key: {:?}", e))?;
 
     let sig_array: &[u8] = sig_bytes.as_slice();
     Ok(pk.verify(
@@ -250,7 +248,8 @@ pub fn decode_hybrid_private_key_pem(pem: &str) -> Result<(SigningKey, Vec<u8>)>
         .context("Missing Ed25519 section in hybrid PEM")?;
     let ed_end = pem
         .find("-----END ED25519 PRIVATE KEY-----")
-        .context("Missing Ed25519 end marker")? + "-----END ED25519 PRIVATE KEY-----".len();
+        .context("Missing Ed25519 end marker")?
+        + "-----END ED25519 PRIVATE KEY-----".len();
     let ed_section = &pem[ed_start..ed_end];
 
     let mldsa_start = pem

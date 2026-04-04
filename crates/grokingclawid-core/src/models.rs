@@ -288,9 +288,18 @@ impl AgentCard {
         // Sanitize name for URI path
         let safe_name: String = name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '-'
+                }
+            })
             .collect();
-        format!("spiffe://{}/agent/{}/{}", trust_domain, type_segment, safe_name)
+        format!(
+            "spiffe://{}/agent/{}/{}",
+            trust_domain, type_segment, safe_name
+        )
     }
 
     /// Export this agent card to A2A format.

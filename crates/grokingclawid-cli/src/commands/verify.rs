@@ -46,9 +46,13 @@ pub fn execute(card_path: &Path) -> Result<()> {
             (ed_ok, None)
         }
         CryptoScheme::MlDsa65 => {
-            let pq_pub = card.pq_public_key.as_ref()
+            let pq_pub = card
+                .pq_public_key
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("ML-DSA-65 card missing pq_public_key"))?;
-            let pq_sig = card.pq_signature.as_ref()
+            let pq_sig = card
+                .pq_signature
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("ML-DSA-65 card missing pq_signature"))?;
             let pq_ok = crypto::mldsa_verify(pq_pub, payload.as_bytes(), pq_sig)?;
             // Also check Ed25519 if present
@@ -57,9 +61,13 @@ pub fn execute(card_path: &Path) -> Result<()> {
         }
         CryptoScheme::Hybrid => {
             let ed_ok = crypto::verify(&card.public_key, payload.as_bytes(), &card.signature)?;
-            let pq_pub = card.pq_public_key.as_ref()
+            let pq_pub = card
+                .pq_public_key
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Hybrid card missing pq_public_key"))?;
-            let pq_sig = card.pq_signature.as_ref()
+            let pq_sig = card
+                .pq_signature
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Hybrid card missing pq_signature"))?;
             let pq_ok = crypto::mldsa_verify(pq_pub, payload.as_bytes(), pq_sig)?;
             (ed_ok, Some(pq_ok))
@@ -72,12 +80,28 @@ pub fn execute(card_path: &Path) -> Result<()> {
     let not_before = now >= card.issued_at;
 
     println!();
-    println!("  Ed25519:   {}", if ed_valid { "✅ VALID" } else { "❌ INVALID" });
+    println!(
+        "  Ed25519:   {}",
+        if ed_valid { "✅ VALID" } else { "❌ INVALID" }
+    );
     if let Some(pq) = pq_valid {
-        println!("  ML-DSA-65: {}", if pq { "✅ VALID" } else { "❌ INVALID" });
+        println!(
+            "  ML-DSA-65: {}",
+            if pq { "✅ VALID" } else { "❌ INVALID" }
+        );
     }
-    println!("  Expired:   {}", if not_expired { "✅ No" } else { "❌ Yes" });
-    println!("  Time OK:   {}", if not_before { "✅ Yes" } else { "⚠️  Not yet valid" });
+    println!(
+        "  Expired:   {}",
+        if not_expired { "✅ No" } else { "❌ Yes" }
+    );
+    println!(
+        "  Time OK:   {}",
+        if not_before {
+            "✅ Yes"
+        } else {
+            "⚠️  Not yet valid"
+        }
+    );
     println!();
 
     // Check revocation status

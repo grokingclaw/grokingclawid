@@ -257,11 +257,12 @@ impl TemplateRegistry {
 
     /// Ensure the registry directory exists.
     pub fn init(&self) -> Result<()> {
-        std::fs::create_dir_all(&self.registry_path)
-            .with_context(|| format!(
+        std::fs::create_dir_all(&self.registry_path).with_context(|| {
+            format!(
                 "Failed to create templates directory: {}",
                 self.registry_path.display()
-            ))?;
+            )
+        })?;
         Ok(())
     }
 
@@ -273,8 +274,8 @@ impl TemplateRegistry {
             return Ok(templates);
         }
 
-        let entries = std::fs::read_dir(&self.registry_path)
-            .context("Failed to read templates directory")?;
+        let entries =
+            std::fs::read_dir(&self.registry_path).context("Failed to read templates directory")?;
 
         for entry in entries {
             let entry = entry?;
@@ -283,7 +284,8 @@ impl TemplateRegistry {
                 continue;
             }
 
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
                 .to_string();
@@ -361,7 +363,9 @@ impl TemplateRegistry {
 
     /// Install a template from the remote registry.
     pub async fn install_template(&self, name: &str, version: &str) -> Result<()> {
-        let registry_url = self.registry_url.as_ref()
+        let registry_url = self
+            .registry_url
+            .as_ref()
             .context("No remote registry URL configured")?;
 
         let url = format!(
@@ -378,7 +382,8 @@ impl TemplateRegistry {
             .build()
             .unwrap_or_default();
 
-        let resp = http.get(&url)
+        let resp = http
+            .get(&url)
             .send()
             .await
             .with_context(|| format!("Failed to download template '{}'", name))?;
@@ -391,7 +396,9 @@ impl TemplateRegistry {
             );
         }
 
-        let archive_bytes = resp.bytes().await
+        let archive_bytes = resp
+            .bytes()
+            .await
             .context("Failed to read template archive")?;
 
         // Verify hash if provided
@@ -407,7 +414,12 @@ impl TemplateRegistry {
         std::fs::write(&archive_path, &archive_bytes)?;
 
         let output = tokio::process::Command::new("tar")
-            .args(["xzf", &archive_path.to_string_lossy(), "-C", &template_dir.to_string_lossy()])
+            .args([
+                "xzf",
+                &archive_path.to_string_lossy(),
+                "-C",
+                &template_dir.to_string_lossy(),
+            ])
             .output()
             .await
             .context("Failed to extract template archive")?;
@@ -503,10 +515,7 @@ impl TemplateRegistry {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(
-                    &run_path,
-                    std::fs::Permissions::from_mode(0o755),
-                )?;
+                std::fs::set_permissions(&run_path, std::fs::Permissions::from_mode(0o755))?;
             }
         }
 
@@ -678,7 +687,8 @@ name = "test-template"
 version = "1.0.0"
 description = "A test template"
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create another without manifest
         let tmpl_dir2 = dir.path().join("no-manifest");
@@ -687,7 +697,10 @@ description = "A test template"
         let templates = registry.list_local().unwrap();
         assert_eq!(templates.len(), 2);
 
-        let with_manifest = templates.iter().find(|t| t.name == "test-template").unwrap();
+        let with_manifest = templates
+            .iter()
+            .find(|t| t.name == "test-template")
+            .unwrap();
         assert_eq!(with_manifest.version, "1.0.0");
         assert!(with_manifest.has_manifest);
 
@@ -703,7 +716,9 @@ description = "A test template"
         let registry = TemplateRegistry::new(templates_dir.path().to_path_buf(), None);
 
         // Template doesn't exist — should create stub
-        registry.install_for_agent("nonexistent", agent_dir.path()).unwrap();
+        registry
+            .install_for_agent("nonexistent", agent_dir.path())
+            .unwrap();
 
         let run_sh = agent_dir.path().join("run.sh");
         assert!(run_sh.exists());
@@ -723,7 +738,9 @@ description = "A test template"
         fs::write(tmpl_dir.join("health.sh"), "#!/bin/bash\nexit 0\n").unwrap();
 
         let registry = TemplateRegistry::new(templates_dir.path().to_path_buf(), None);
-        registry.install_for_agent("my-template", agent_dir.path()).unwrap();
+        registry
+            .install_for_agent("my-template", agent_dir.path())
+            .unwrap();
 
         assert!(agent_dir.path().join("run.sh").exists());
         assert!(agent_dir.path().join("health.sh").exists());
@@ -734,10 +751,16 @@ description = "A test template"
         let templates_dir = tempfile::tempdir().unwrap();
         let source_dir = tempfile::tempdir().unwrap();
 
-        fs::write(source_dir.path().join("run.sh"), "#!/bin/bash\necho hello\n").unwrap();
+        fs::write(
+            source_dir.path().join("run.sh"),
+            "#!/bin/bash\necho hello\n",
+        )
+        .unwrap();
 
         let registry = TemplateRegistry::new(templates_dir.path().to_path_buf(), None);
-        registry.create_from_local("new-template", source_dir.path()).unwrap();
+        registry
+            .create_from_local("new-template", source_dir.path())
+            .unwrap();
 
         let template_dir = templates_dir.path().join("new-template");
         assert!(template_dir.exists());
@@ -759,7 +782,8 @@ description = "A test template"
         fs::write(
             tmpl_dir.join("manifest.toml"),
             "[template]\nname = \"test\"\nversion = \"2.0.0\"\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let manifest = registry.get_template("test").unwrap().unwrap();
         assert_eq!(manifest.template.name, "test");

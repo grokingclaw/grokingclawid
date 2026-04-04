@@ -39,12 +39,13 @@ pub fn derive_iota_address(public_key_bytes: &[u8; 32]) -> String {
     use std::io::Write;
     // IOTA Rebased: Ed25519 address = BLAKE2b-256(flag || pubkey)
     // Flag byte 0x00 = Ed25519 scheme identifier, prepended before hashing.
-    let mut hasher = Blake2bVar::new(32)
-        .expect("32 bytes is a valid Blake2b output size");
+    let mut hasher = Blake2bVar::new(32).expect("32 bytes is a valid Blake2b output size");
     hasher.write_all(&[0x00]).expect("write Ed25519 flag byte");
     hasher.write_all(public_key_bytes).expect("write to hasher");
     let mut hash = [0u8; 32];
-    hasher.finalize_variable(&mut hash).expect("finalize Blake2b");
+    hasher
+        .finalize_variable(&mut hash)
+        .expect("finalize Blake2b");
     format!("0x{}", hex::encode(hash))
 }
 
@@ -79,12 +80,13 @@ pub struct PqTransactionAttestation {
 #[cfg(feature = "wallet")]
 pub fn compute_tx_digest(tx_bytes: &[u8]) -> [u8; 32] {
     use std::io::Write;
-    let mut hasher = Blake2bVar::new(32)
-        .expect("32 bytes is a valid Blake2b output size");
+    let mut hasher = Blake2bVar::new(32).expect("32 bytes is a valid Blake2b output size");
     hasher.write_all(&INTENT_PREFIX).expect("write intent");
     hasher.write_all(tx_bytes).expect("write tx_bytes");
     let mut digest = [0u8; 32];
-    hasher.finalize_variable(&mut digest).expect("finalize Blake2b");
+    hasher
+        .finalize_variable(&mut digest)
+        .expect("finalize Blake2b");
     digest
 }
 
@@ -93,10 +95,7 @@ pub fn compute_tx_digest(tx_bytes: &[u8]) -> [u8; 32] {
 /// IOTA signature format: flag(0x00) || ed25519_signature(64 bytes) || pubkey(32 bytes)
 /// The message signed is: BLAKE2b-256(intent_prefix || tx_bytes)
 #[cfg(feature = "wallet")]
-pub fn sign_transaction(
-    signing_key: &ed25519_dalek::SigningKey,
-    tx_bytes: &[u8],
-) -> String {
+pub fn sign_transaction(signing_key: &ed25519_dalek::SigningKey, tx_bytes: &[u8]) -> String {
     let digest = compute_tx_digest(tx_bytes);
 
     // Sign the digest
@@ -273,15 +272,23 @@ impl IotaClient {
             params: vec![address],
         };
 
-        let resp = self.http.post(&self.rpc_url).json(&req).send().await
+        let resp = self
+            .http
+            .post(&self.rpc_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to connect to IOTA RPC")?;
-        let body: RpcResponse<BalanceResponse> = resp.json().await
+        let body: RpcResponse<BalanceResponse> = resp
+            .json()
+            .await
             .context("Failed to parse balance response")?;
 
         if let Some(err) = body.error {
             anyhow::bail!("RPC error: {}", err.message);
         }
-        body.result.ok_or_else(|| anyhow::anyhow!("No balance result returned"))
+        body.result
+            .ok_or_else(|| anyhow::anyhow!("No balance result returned"))
     }
 
     /// Request test tokens from the faucet.
@@ -292,10 +299,18 @@ impl IotaClient {
             },
         };
 
-        let resp = self.http.post(&self.faucet_url).json(&req).send().await
+        let resp = self
+            .http
+            .post(&self.faucet_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to connect to IOTA faucet")?;
         let status = resp.status();
-        let body = resp.text().await.context("Failed to read faucet response")?;
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read faucet response")?;
 
         if !status.is_success() {
             anyhow::bail!("Faucet request failed ({}): {}", status, body);
@@ -312,15 +327,23 @@ impl IotaClient {
             params: serde_json::json!([address]),
         };
 
-        let resp = self.http.post(&self.rpc_url).json(&req).send().await
+        let resp = self
+            .http
+            .post(&self.rpc_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to connect to IOTA RPC")?;
-        let body: RpcResponse<serde_json::Value> = resp.json().await
+        let body: RpcResponse<serde_json::Value> = resp
+            .json()
+            .await
             .context("Failed to parse coins response")?;
 
         if let Some(err) = body.error {
             anyhow::bail!("RPC error: {}", err.message);
         }
-        body.result.ok_or_else(|| anyhow::anyhow!("No coins result returned"))
+        body.result
+            .ok_or_else(|| anyhow::anyhow!("No coins result returned"))
     }
 
     /// Build an unsigned IOTA transfer transaction.
@@ -342,14 +365,16 @@ impl IotaClient {
             .and_then(|arr| arr.first())
             .and_then(|c| c.get("coinObjectId"))
             .and_then(|id| id.as_str())
-            .ok_or_else(|| anyhow::anyhow!("No coin objects found. Request tokens from faucet first."))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("No coin objects found. Request tokens from faucet first.")
+            })?;
 
         let params = serde_json::json!([
-            sender,                     // signer
-            coin_id,                    // iota_object_id (coin to use for gas + transfer)
-            gas_budget.to_string(),     // gas_budget (string)
-            recipient,                  // recipient
-            amount.to_string()          // amount (string)
+            sender,                 // signer
+            coin_id,                // iota_object_id (coin to use for gas + transfer)
+            gas_budget.to_string(), // gas_budget (string)
+            recipient,              // recipient
+            amount.to_string()      // amount (string)
         ]);
 
         let req = RpcRequest {
@@ -359,17 +384,27 @@ impl IotaClient {
             params,
         };
 
-        let resp = self.http.post(&self.rpc_url).json(&req).send().await
+        let resp = self
+            .http
+            .post(&self.rpc_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to connect to IOTA RPC")?;
-        let body: RpcResponse<TransferResponse> = resp.json().await
+        let body: RpcResponse<TransferResponse> = resp
+            .json()
+            .await
             .context("Failed to parse transfer response")?;
 
         if let Some(err) = body.error {
             anyhow::bail!("Transfer build failed: {}", err.message);
         }
 
-        let tx = body.result.ok_or_else(|| anyhow::anyhow!("No transfer result"))?;
-        let tx_bytes = BASE64.decode(&tx.tx_bytes)
+        let tx = body
+            .result
+            .ok_or_else(|| anyhow::anyhow!("No transfer result"))?;
+        let tx_bytes = BASE64
+            .decode(&tx.tx_bytes)
             .context("Failed to decode transaction bytes")?;
 
         Ok(tx_bytes)
@@ -396,15 +431,23 @@ impl IotaClient {
             params,
         };
 
-        let resp = self.http.post(&self.rpc_url).json(&req).send().await
+        let resp = self
+            .http
+            .post(&self.rpc_url)
+            .json(&req)
+            .send()
+            .await
             .context("Failed to connect to IOTA RPC")?;
-        let body: RpcResponse<ExecuteResponse> = resp.json().await
+        let body: RpcResponse<ExecuteResponse> = resp
+            .json()
+            .await
             .context("Failed to parse execution response")?;
 
         if let Some(err) = body.error {
             anyhow::bail!("Transaction execution failed: {}", err.message);
         }
-        body.result.ok_or_else(|| anyhow::anyhow!("No execution result"))
+        body.result
+            .ok_or_else(|| anyhow::anyhow!("No execution result"))
     }
 
     /// Transfer IOTA: build, sign, and execute in one call (Ed25519 only).
@@ -417,7 +460,9 @@ impl IotaClient {
         gas_budget: u64,
     ) -> Result<String> {
         // 1. Build unsigned transaction
-        let tx_bytes = self.build_transfer(sender, recipient, amount, gas_budget).await?;
+        let tx_bytes = self
+            .build_transfer(sender, recipient, amount, gas_budget)
+            .await?;
 
         // 2. Sign
         let signature = sign_transaction(signing_key, &tx_bytes);
@@ -446,17 +491,15 @@ impl IotaClient {
         gas_budget: u64,
     ) -> Result<(String, PqTransactionAttestation)> {
         // 1. Build unsigned transaction
-        let tx_bytes = self.build_transfer(sender, recipient, amount, gas_budget).await?;
+        let tx_bytes = self
+            .build_transfer(sender, recipient, amount, gas_budget)
+            .await?;
 
         // 2. Ed25519 sign for on-chain
         let ed_signature = sign_transaction(ed_signing_key, &tx_bytes);
 
         // 3. ML-DSA-65 attestation for PQ audit trail
-        let pq_attestation = create_pq_attestation(
-            mldsa_secret_key,
-            mldsa_public_key,
-            &tx_bytes,
-        )?;
+        let pq_attestation = create_pq_attestation(mldsa_secret_key, mldsa_public_key, &tx_bytes)?;
 
         // 4. Execute on-chain
         let result = self.execute_transaction(&tx_bytes, &ed_signature).await?;

@@ -22,9 +22,11 @@ use std::path::PathBuf;
 #[command(name = "grokingclawid")]
 #[command(version = "0.4.0")]
 #[command(about = "Cryptographic identity management for AI agents")]
-#[command(long_about = "GrokingClawID provides hybrid Ed25519 + ML-DSA-65 (post-quantum) identity \n\
+#[command(
+    long_about = "GrokingClawID provides hybrid Ed25519 + ML-DSA-65 (post-quantum) identity \n\
     issuance, verification, delegation, and tamper-evident audit logging for \n\
-    AI agents. Compatible with A2A and SPIFFE identity standards.")]
+    AI agents. Compatible with A2A and SPIFFE identity standards."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -468,7 +470,11 @@ fn main() {
             require_pq,
             output,
         } => commands::challenge::execute_challenge(
-            &agent_card, &require_scope, ttl, require_pq, &output,
+            &agent_card,
+            &require_scope,
+            ttl,
+            require_pq,
+            &output,
         ),
 
         Commands::Respond {
@@ -476,9 +482,7 @@ fn main() {
             agent_card,
             key,
             output,
-        } => commands::challenge::execute_respond(
-            &challenge, &agent_card, &key, &output,
-        ),
+        } => commands::challenge::execute_respond(&challenge, &agent_card, &key, &output),
 
         Commands::VerifyResponse {
             challenge,
@@ -492,9 +496,7 @@ fn main() {
             key,
             headers,
             format,
-        } => commands::sign::execute_sign(
-            &method, &url, &agent_card, &key, &headers, &format,
-        ),
+        } => commands::sign::execute_sign(&method, &url, &agent_card, &key, &headers, &format),
 
         Commands::VerifySig {
             method,
@@ -505,8 +507,13 @@ fn main() {
             agent_card,
             headers,
         } => commands::sign::execute_verify(
-            &method, &url, &signature_input, &signature,
-            pq_signature.as_deref(), &agent_card, &headers,
+            &method,
+            &url,
+            &signature_input,
+            &signature,
+            pq_signature.as_deref(),
+            &agent_card,
+            &headers,
         ),
 
         Commands::Rotate {
@@ -538,27 +545,36 @@ fn main() {
         },
 
         Commands::Wallet { action } => match action {
-            WalletAction::Init { agent_card } => {
-                commands::wallet::execute_init(&agent_card)
-            }
-            WalletAction::Balance { agent_card, network } => {
-                commands::wallet::execute_balance(&agent_card, &network)
-            }
-            WalletAction::Faucet { agent_card, network } => {
-                commands::wallet::execute_faucet(&agent_card, &network)
-            }
-            WalletAction::Coins { agent_card, network } => {
-                commands::wallet::execute_coins(&agent_card, &network)
-            }
-            WalletAction::Send { agent_card, key, to, amount, network } => {
-                commands::wallet::execute_send(&agent_card, &key, &to, &amount, &network)
-            }
-            WalletAction::Watch { agent_card, network, limit } => {
-                commands::wallet::execute_watch(&agent_card, &network, limit)
-            }
-            WalletAction::Events { agent_card, network, limit } => {
-                commands::wallet::execute_events(&agent_card, &network, limit)
-            }
+            WalletAction::Init { agent_card } => commands::wallet::execute_init(&agent_card),
+            WalletAction::Balance {
+                agent_card,
+                network,
+            } => commands::wallet::execute_balance(&agent_card, &network),
+            WalletAction::Faucet {
+                agent_card,
+                network,
+            } => commands::wallet::execute_faucet(&agent_card, &network),
+            WalletAction::Coins {
+                agent_card,
+                network,
+            } => commands::wallet::execute_coins(&agent_card, &network),
+            WalletAction::Send {
+                agent_card,
+                key,
+                to,
+                amount,
+                network,
+            } => commands::wallet::execute_send(&agent_card, &key, &to, &amount, &network),
+            WalletAction::Watch {
+                agent_card,
+                network,
+                limit,
+            } => commands::wallet::execute_watch(&agent_card, &network, limit),
+            WalletAction::Events {
+                agent_card,
+                network,
+                limit,
+            } => commands::wallet::execute_events(&agent_card, &network, limit),
         },
     };
 

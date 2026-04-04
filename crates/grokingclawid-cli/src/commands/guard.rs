@@ -173,7 +173,10 @@ pub fn execute(
                     let response = handle_authenticate(&mut guard, &request);
                     let resp_json = match serde_json::to_string(&response) {
                         Ok(j) => j,
-                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                        Err(e) => {
+                            eprintln!("[guard] JSON serialize error: {}", e);
+                            continue;
+                        }
                     };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
@@ -186,7 +189,10 @@ pub fn execute(
                     let response = handle_status(&guard, &request);
                     let resp_json = match serde_json::to_string(&response) {
                         Ok(j) => j,
-                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                        Err(e) => {
+                            eprintln!("[guard] JSON serialize error: {}", e);
+                            continue;
+                        }
                     };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
@@ -230,7 +236,10 @@ pub fn execute(
             };
             let resp_json = match serde_json::to_string(&response) {
                 Ok(j) => j,
-                Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                Err(e) => {
+                    eprintln!("[guard] JSON serialize error: {}", e);
+                    continue;
+                }
             };
             let mut out = std::io::stdout().lock();
             let _ = writeln!(out, "{}", resp_json);
@@ -266,15 +275,15 @@ pub fn execute(
                     };
                     let resp_json = match serde_json::to_string(&response) {
                         Ok(j) => j,
-                        Err(e) => { eprintln!("[guard] JSON serialize error: {}", e); continue; }
+                        Err(e) => {
+                            eprintln!("[guard] JSON serialize error: {}", e);
+                            continue;
+                        }
                     };
                     let mut out = std::io::stdout().lock();
                     let _ = writeln!(out, "{}", resp_json);
                     let _ = out.flush();
-                    eprintln!(
-                        "[guard] ❌ Blocked tool '{}': insufficient scope",
-                        name
-                    );
+                    eprintln!("[guard] ❌ Blocked tool '{}': insufficient scope", name);
                     continue;
                 }
             }
@@ -285,7 +294,11 @@ pub fn execute(
             "[guard] ✅ {} → {} (agent: {})",
             guard.request_count,
             request.method,
-            guard.agent_card.as_ref().map(|c| c.name.as_str()).unwrap_or("?")
+            guard
+                .agent_card
+                .as_ref()
+                .map(|c| c.name.as_str())
+                .unwrap_or("?")
         );
         drop(guard);
 
@@ -299,7 +312,10 @@ pub fn execute(
     let _ = forward_thread.join();
 
     let guard = state.lock().unwrap_or_else(|e| e.into_inner());
-    eprintln!("[guard] Session ended. {} requests, {} blocked.", guard.request_count, guard.blocked_count);
+    eprintln!(
+        "[guard] Session ended. {} requests, {} blocked.",
+        guard.request_count, guard.blocked_count
+    );
 
     Ok(())
 }
@@ -364,7 +380,11 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
         match serde_json::to_string(&c) {
             Ok(p) => p,
             Err(e) => {
-                return error_response(&request.id, -32002, &format!("Card serialization error: {}", e));
+                return error_response(
+                    &request.id,
+                    -32002,
+                    &format!("Card serialization error: {}", e),
+                );
             }
         }
     };
@@ -372,15 +392,26 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
     let ed_valid = match crypto::verify(&card.public_key, payload.as_bytes(), &card.signature) {
         Ok(v) => v,
         Err(e) => {
-            return error_response(&request.id, -32002, &format!("Ed25519 verification error: {}", e));
+            return error_response(
+                &request.id,
+                -32002,
+                &format!("Ed25519 verification error: {}", e),
+            );
         }
     };
 
     if !ed_valid {
         state.auth_failures += 1;
         state.last_failure_time = Some(std::time::Instant::now());
-        eprintln!("[guard] ❌ Authentication failed: invalid Ed25519 signature for '{}'", card.name);
-        return error_response(&request.id, -32002, "Invalid Ed25519 signature on agent card.");
+        eprintln!(
+            "[guard] ❌ Authentication failed: invalid Ed25519 signature for '{}'",
+            card.name
+        );
+        return error_response(
+            &request.id,
+            -32002,
+            "Invalid Ed25519 signature on agent card.",
+        );
     }
 
     // Check PQ signature if required or hybrid
@@ -408,11 +439,22 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
         match crypto::mldsa_verify(pq_pub, payload.as_bytes(), pq_sig) {
             Ok(true) => {}
             Ok(false) => {
-                eprintln!("[guard] ❌ Authentication failed: invalid ML-DSA-65 signature for '{}'", card.name);
-                return error_response(&request.id, -32002, "Invalid ML-DSA-65 signature on agent card.");
+                eprintln!(
+                    "[guard] ❌ Authentication failed: invalid ML-DSA-65 signature for '{}'",
+                    card.name
+                );
+                return error_response(
+                    &request.id,
+                    -32002,
+                    "Invalid ML-DSA-65 signature on agent card.",
+                );
             }
             Err(e) => {
-                return error_response(&request.id, -32002, &format!("ML-DSA-65 verification error: {}", e));
+                return error_response(
+                    &request.id,
+                    -32002,
+                    &format!("ML-DSA-65 verification error: {}", e),
+                );
             }
         }
     }
@@ -422,7 +464,10 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
     if now >= card.expires_at {
         state.auth_failures += 1;
         state.last_failure_time = Some(std::time::Instant::now());
-        eprintln!("[guard] ❌ Authentication failed: card expired for '{}'", card.name);
+        eprintln!(
+            "[guard] ❌ Authentication failed: card expired for '{}'",
+            card.name
+        );
         return error_response(
             &request.id,
             -32002,
@@ -433,14 +478,19 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
     // Check revocation
     if let Ok(conn) = revocation::open_db() {
         if revocation::is_revoked(&conn, &card.id).unwrap_or(false) {
-            eprintln!("[guard] ❌ Authentication failed: card revoked for '{}'", card.name);
+            eprintln!(
+                "[guard] ❌ Authentication failed: card revoked for '{}'",
+                card.name
+            );
             return error_response(&request.id, -32002, "Agent card has been revoked.");
         }
     }
 
     // Check scopes
     let has_required_scope = state.allowed_scopes.iter().all(|required| {
-        card.scopes.iter().any(|s| s == required || s == "*" || s == "admin")
+        card.scopes
+            .iter()
+            .any(|s| s == required || s == "*" || s == "admin")
     });
 
     if !has_required_scope {
@@ -466,7 +516,10 @@ fn handle_authenticate(state: &mut GuardState, request: &JsonRpcRequest) -> Json
 
     eprintln!(
         "[guard] ✅ Authenticated: '{}' ({}), scopes: {:?}, expires: {}",
-        card.name, card.id, card.scopes, card.expires_at.to_rfc3339()
+        card.name,
+        card.id,
+        card.scopes,
+        card.expires_at.to_rfc3339()
     );
 
     JsonRpcResponse {

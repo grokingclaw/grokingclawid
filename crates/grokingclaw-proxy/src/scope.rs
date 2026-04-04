@@ -24,7 +24,10 @@ pub enum ScopeDecision {
     /// Request is allowed.
     Allow,
     /// Domain not in allowlist.
-    DenyDomain { domain: String, allowed: Vec<String> },
+    DenyDomain {
+        domain: String,
+        allowed: Vec<String>,
+    },
     /// Rate limit exceeded.
     DenyRateLimit { limit: u32, window_seconds: u64 },
 }
@@ -56,7 +59,11 @@ impl ScopeConfig {
         let now = std::time::Instant::now();
         let window = std::time::Duration::from_secs(60);
         // Evict timestamps older than 60s
-        while self.request_timestamps.front().map_or(false, |t| now.duration_since(*t) >= window) {
+        while self
+            .request_timestamps
+            .front()
+            .map_or(false, |t| now.duration_since(*t) >= window)
+        {
             self.request_timestamps.pop_front();
         }
         if self.request_timestamps.len() as u32 >= self.max_requests_per_minute {
@@ -158,39 +165,66 @@ mod tests {
     #[test]
     fn test_allow_all_when_empty() {
         let mut scope = ScopeConfig::permissive();
-        assert!(matches!(scope.check_url("https://anything.com/foo"), ScopeDecision::Allow));
+        assert!(matches!(
+            scope.check_url("https://anything.com/foo"),
+            ScopeDecision::Allow
+        ));
     }
 
     #[test]
     fn test_allow_exact_domain() {
         let mut scope = ScopeConfig::new(vec!["api.openai.com".to_string()], 0);
-        assert!(matches!(scope.check_url("https://api.openai.com/v1/chat"), ScopeDecision::Allow));
+        assert!(matches!(
+            scope.check_url("https://api.openai.com/v1/chat"),
+            ScopeDecision::Allow
+        ));
     }
 
     #[test]
     fn test_deny_unlisted_domain() {
         let mut scope = ScopeConfig::new(vec!["api.openai.com".to_string()], 0);
-        assert!(matches!(scope.check_url("https://evil.com/steal"), ScopeDecision::DenyDomain { .. }));
+        assert!(matches!(
+            scope.check_url("https://evil.com/steal"),
+            ScopeDecision::DenyDomain { .. }
+        ));
     }
 
     #[test]
     fn test_allow_subdomain() {
         let mut scope = ScopeConfig::new(vec!["openai.com".to_string()], 0);
-        assert!(matches!(scope.check_url("https://api.openai.com/v1/chat"), ScopeDecision::Allow));
+        assert!(matches!(
+            scope.check_url("https://api.openai.com/v1/chat"),
+            ScopeDecision::Allow
+        ));
     }
 
     #[test]
     fn test_connect_check() {
         let mut scope = ScopeConfig::new(vec!["github.com".to_string()], 0);
-        assert!(matches!(scope.check_connect("github.com:443"), ScopeDecision::Allow));
-        assert!(matches!(scope.check_connect("evil.com:443"), ScopeDecision::DenyDomain { .. }));
+        assert!(matches!(
+            scope.check_connect("github.com:443"),
+            ScopeDecision::Allow
+        ));
+        assert!(matches!(
+            scope.check_connect("evil.com:443"),
+            ScopeDecision::DenyDomain { .. }
+        ));
     }
 
     #[test]
     fn test_rate_limit() {
         let mut scope = ScopeConfig::new(vec![], 2);
-        assert!(matches!(scope.check_url("https://a.com"), ScopeDecision::Allow));
-        assert!(matches!(scope.check_url("https://b.com"), ScopeDecision::Allow));
-        assert!(matches!(scope.check_url("https://c.com"), ScopeDecision::DenyRateLimit { .. }));
+        assert!(matches!(
+            scope.check_url("https://a.com"),
+            ScopeDecision::Allow
+        ));
+        assert!(matches!(
+            scope.check_url("https://b.com"),
+            ScopeDecision::Allow
+        ));
+        assert!(matches!(
+            scope.check_url("https://c.com"),
+            ScopeDecision::DenyRateLimit { .. }
+        ));
     }
 }

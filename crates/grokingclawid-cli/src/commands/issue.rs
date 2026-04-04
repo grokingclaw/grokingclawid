@@ -58,8 +58,7 @@ pub fn execute(
     let id = Uuid::new_v4();
 
     // Generate SPIFFE ID if trust domain is provided
-    let spiffe_id = trust_domain
-        .map(|td| AgentCard::generate_spiffe_id(td, name, &atype));
+    let spiffe_id = trust_domain.map(|td| AgentCard::generate_spiffe_id(td, name, &atype));
 
     // Generate keys and sign based on scheme
     let (public_key, pq_public_key, signature, pq_signature, key_pem) = match &scheme {
@@ -68,7 +67,10 @@ pub fn execute(
             let pub_b64 = crypto::encode_public_key(&vk);
 
             // Build card for signing
-            let card = build_card(id, name, owner, &scopes, &pub_b64, None, "", None, &scheme, now, duration, &atype, None, &spiffe_id);
+            let card = build_card(
+                id, name, owner, &scopes, &pub_b64, None, "", None, &scheme, now, duration, &atype,
+                None, &spiffe_id,
+            );
             let payload = card_signing_payload(&card)?;
             let sig = crypto::sign(&sk, payload.as_bytes());
             let pem = crypto::encode_private_key_pem(&sk);
@@ -82,7 +84,22 @@ pub fn execute(
             let (ed_sk, ed_vk) = crypto::generate_keypair();
             let ed_pub_b64 = crypto::encode_public_key(&ed_vk);
 
-            let card = build_card(id, name, owner, &scopes, &ed_pub_b64, Some(&pq_pub_b64), "", None, &scheme, now, duration, &atype, None, &spiffe_id);
+            let card = build_card(
+                id,
+                name,
+                owner,
+                &scopes,
+                &ed_pub_b64,
+                Some(&pq_pub_b64),
+                "",
+                None,
+                &scheme,
+                now,
+                duration,
+                &atype,
+                None,
+                &spiffe_id,
+            );
             let payload = card_signing_payload(&card)?;
             let pq_sig = crypto::mldsa_sign(&mldsa_kp.secret_key_bytes, payload.as_bytes())?;
             // Sign with ed25519 too for the signature field
@@ -96,12 +113,35 @@ pub fn execute(
             let ed_pub_b64 = crypto::encode_public_key(&hkp.ed25519_verifying);
             let pq_pub_b64 = crypto::encode_mldsa_public_key(&hkp.mldsa_public);
 
-            let card = build_card(id, name, owner, &scopes, &ed_pub_b64, Some(&pq_pub_b64), "", None, &scheme, now, duration, &atype, None, &spiffe_id);
+            let card = build_card(
+                id,
+                name,
+                owner,
+                &scopes,
+                &ed_pub_b64,
+                Some(&pq_pub_b64),
+                "",
+                None,
+                &scheme,
+                now,
+                duration,
+                &atype,
+                None,
+                &spiffe_id,
+            );
             let payload = card_signing_payload(&card)?;
-            let hsig = crypto::hybrid_sign(&hkp.ed25519_signing, &hkp.mldsa_secret, payload.as_bytes())?;
-            let pem = crypto::encode_hybrid_private_key_pem(&hkp.ed25519_signing, &hkp.mldsa_secret);
+            let hsig =
+                crypto::hybrid_sign(&hkp.ed25519_signing, &hkp.mldsa_secret, payload.as_bytes())?;
+            let pem =
+                crypto::encode_hybrid_private_key_pem(&hkp.ed25519_signing, &hkp.mldsa_secret);
 
-            (ed_pub_b64, Some(pq_pub_b64), hsig.ed25519, Some(hsig.mldsa65), pem)
+            (
+                ed_pub_b64,
+                Some(pq_pub_b64),
+                hsig.ed25519,
+                Some(hsig.mldsa65),
+                pem,
+            )
         }
     };
 
@@ -124,8 +164,12 @@ pub fn execute(
     };
 
     // Write output files
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
 
     let card_path = output_dir.join("agent-card.json");
     let card_json =
@@ -242,7 +286,13 @@ fn canonical_json(value: &serde_json::Value) -> String {
             entries.sort_by_key(|(k, _)| *k);
             let inner: Vec<String> = entries
                 .iter()
-                .map(|(k, v)| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json(v)))
+                .map(|(k, v)| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(k).unwrap(),
+                        canonical_json(v)
+                    )
+                })
                 .collect();
             format!("{{{}}}", inner.join(","))
         }

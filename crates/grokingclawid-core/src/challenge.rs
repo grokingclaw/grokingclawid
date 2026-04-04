@@ -147,7 +147,9 @@ pub fn challenge_to_sign_bytes(challenge: &Challenge) -> Vec<u8> {
     }
     data.push(0x00);
     for (i, scope) in challenge.required_scopes.iter().enumerate() {
-        if i > 0 { data.push(0x00); }
+        if i > 0 {
+            data.push(0x00);
+        }
         data.extend_from_slice(scope.as_bytes());
     }
     data
@@ -211,7 +213,10 @@ pub fn verify_response(
         detail: if time_ok {
             format!("Challenge valid until {}", challenge.expires_at)
         } else {
-            format!("Challenge expired at {} (now: {})", challenge.expires_at, now)
+            format!(
+                "Challenge expired at {} (now: {})",
+                challenge.expires_at, now
+            )
         },
     });
 
@@ -244,8 +249,7 @@ pub fn verify_response(
     });
 
     // 4. Ed25519 signature
-    let ed_ok = crypto::verify(&card.public_key, &sign_bytes, &response.signature)
-        .unwrap_or(false);
+    let ed_ok = crypto::verify(&card.public_key, &sign_bytes, &response.signature).unwrap_or(false);
     checks.push(Check {
         name: "ed25519_signature".to_string(),
         passed: ed_ok,
@@ -260,8 +264,7 @@ pub fn verify_response(
     let _pq_checked = if card.crypto_scheme == CryptoScheme::Hybrid {
         match (&response.pq_signature, &card.pq_public_key) {
             (Some(pq_sig), Some(pq_pub)) => {
-                let valid = crypto::mldsa_verify(pq_pub, &sign_bytes, pq_sig)
-                    .unwrap_or(false);
+                let valid = crypto::mldsa_verify(pq_pub, &sign_bytes, pq_sig).unwrap_or(false);
                 checks.push(Check {
                     name: "mldsa65_signature".to_string(),
                     passed: valid,
@@ -287,16 +290,22 @@ pub fn verify_response(
     };
 
     // 6. Required scopes
-    let scopes_ok = challenge.required_scopes.iter().all(|required| {
-        card.scopes.iter().any(|s| s == required)
-    });
+    let scopes_ok = challenge
+        .required_scopes
+        .iter()
+        .all(|required| card.scopes.iter().any(|s| s == required));
     checks.push(Check {
         name: "scopes".to_string(),
         passed: scopes_ok,
         detail: if scopes_ok {
-            format!("All required scopes present: {:?}", challenge.required_scopes)
+            format!(
+                "All required scopes present: {:?}",
+                challenge.required_scopes
+            )
         } else {
-            let missing: Vec<&String> = challenge.required_scopes.iter()
+            let missing: Vec<&String> = challenge
+                .required_scopes
+                .iter()
                 .filter(|r| !card.scopes.contains(r))
                 .collect();
             format!("Missing scopes: {:?}", missing)
@@ -397,12 +406,7 @@ mod tests {
             None,
         );
 
-        let challenge = create_challenge(
-            "challenger-1",
-            &["read".to_string()],
-            Some(60),
-            false,
-        );
+        let challenge = create_challenge("challenger-1", &["read".to_string()], Some(60), false);
 
         let response = respond_to_challenge(&challenge, &card, &sk, None).unwrap();
         let result = verify_response(&challenge, &response).unwrap();
@@ -506,8 +510,7 @@ mod tests {
         );
 
         // Create an already-expired challenge
-        let mut challenge =
-            create_challenge("challenger", &["read".to_string()], Some(60), false);
+        let mut challenge = create_challenge("challenger", &["read".to_string()], Some(60), false);
         challenge.expires_at = Utc::now() - Duration::seconds(10);
 
         let response = respond_to_challenge(&challenge, &card, &sk, None).unwrap();

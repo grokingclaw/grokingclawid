@@ -34,8 +34,7 @@ pub fn execute_challenge(
         require_pq,
     );
 
-    let json = serde_json::to_string_pretty(&challenge)
-        .context("Failed to serialize challenge")?;
+    let json = serde_json::to_string_pretty(&challenge).context("Failed to serialize challenge")?;
     fs::write(output, &json)
         .with_context(|| format!("Failed to write challenge: {}", output.display()))?;
 
@@ -68,8 +67,8 @@ pub fn execute_respond(
 ) -> Result<()> {
     let challenge_json = fs::read_to_string(challenge_path)
         .with_context(|| format!("Failed to read challenge: {}", challenge_path.display()))?;
-    let challenge: challenge::Challenge = serde_json::from_str(&challenge_json)
-        .context("Failed to parse challenge JSON")?;
+    let challenge: challenge::Challenge =
+        serde_json::from_str(&challenge_json).context("Failed to parse challenge JSON")?;
 
     let card = load_card(card_path)?;
     let key_pem = fs::read_to_string(key_path)
@@ -103,15 +102,10 @@ pub fn execute_respond(
         }
     };
 
-    let response = challenge::respond_to_challenge(
-        &challenge,
-        &card,
-        &ed_key,
-        mldsa_sk.as_deref(),
-    )?;
+    let response =
+        challenge::respond_to_challenge(&challenge, &card, &ed_key, mldsa_sk.as_deref())?;
 
-    let json = serde_json::to_string_pretty(&response)
-        .context("Failed to serialize response")?;
+    let json = serde_json::to_string_pretty(&response).context("Failed to serialize response")?;
     fs::write(output, &json)
         .with_context(|| format!("Failed to write response: {}", output.display()))?;
 
@@ -134,24 +128,24 @@ pub fn execute_respond(
 }
 
 /// Execute `verify-response` — verify a peer's challenge response.
-pub fn execute_verify_response(
-    challenge_path: &Path,
-    response_path: &Path,
-) -> Result<()> {
+pub fn execute_verify_response(challenge_path: &Path, response_path: &Path) -> Result<()> {
     let challenge_json = fs::read_to_string(challenge_path)
         .with_context(|| format!("Failed to read challenge: {}", challenge_path.display()))?;
-    let challenge: challenge::Challenge = serde_json::from_str(&challenge_json)
-        .context("Failed to parse challenge JSON")?;
+    let challenge: challenge::Challenge =
+        serde_json::from_str(&challenge_json).context("Failed to parse challenge JSON")?;
 
     let response_json = fs::read_to_string(response_path)
         .with_context(|| format!("Failed to read response: {}", response_path.display()))?;
-    let response: ChallengeResponse = serde_json::from_str(&response_json)
-        .context("Failed to parse response JSON")?;
+    let response: ChallengeResponse =
+        serde_json::from_str(&response_json).context("Failed to parse response JSON")?;
 
     println!("🔍 Verifying Challenge Response");
     println!("═══════════════════════════════════════");
     println!("  Challenger:  {}", challenge.issuer);
-    println!("  Responder:   {} ({})", response.agent_card.name, response.agent_card.id);
+    println!(
+        "  Responder:   {} ({})",
+        response.agent_card.name, response.agent_card.id
+    );
     println!("  Challenge:   {}", challenge.id);
     println!("  Crypto:      {}", response.agent_card.crypto_scheme);
     println!("═══════════════════════════════════════");
@@ -168,9 +162,11 @@ pub fn execute_verify_response(
     if result.verified {
         println!("  ═══════════════════════════════════");
         println!("  ✅ AGENT VERIFIED");
-        println!("  Agent: {} ({})",
+        println!(
+            "  Agent: {} ({})",
             result.agent_name.as_deref().unwrap_or("?"),
-            result.agent_id.as_deref().unwrap_or("?"));
+            result.agent_id.as_deref().unwrap_or("?")
+        );
         println!("  ═══════════════════════════════════");
         println!();
         println!("  This agent has proven:");

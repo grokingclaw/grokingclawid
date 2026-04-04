@@ -8,11 +8,11 @@
 
 use anyhow::{Context, Result};
 use chrono::Utc;
-use std::fs;
-use std::path::Path;
 use grokingclawid_core::audit;
 use grokingclawid_core::crypto;
 use grokingclawid_core::models::{AgentCard, CryptoScheme};
+use std::fs;
+use std::path::Path;
 
 use crate::commands::issue::{card_signing_payload, parse_ttl};
 
@@ -26,8 +26,8 @@ pub fn execute(
     // Load existing card
     let card_json = fs::read_to_string(agent_card_path)
         .with_context(|| format!("Failed to read agent card: {}", agent_card_path.display()))?;
-    let old_card: AgentCard = serde_json::from_str(&card_json)
-        .context("Failed to parse agent card JSON")?;
+    let old_card: AgentCard =
+        serde_json::from_str(&card_json).context("Failed to parse agent card JSON")?;
 
     // Load old private key (to prove ownership + audit)
     let old_key_pem = fs::read_to_string(key_path)
@@ -50,7 +50,9 @@ pub fn execute(
     let now = Utc::now();
 
     // Generate new keys based on scheme
-    let (public_key, pq_public_key, signature, pq_signature, new_key_pem) = match &old_card.crypto_scheme {
+    let (public_key, pq_public_key, signature, pq_signature, new_key_pem) = match &old_card
+        .crypto_scheme
+    {
         CryptoScheme::Ed25519 => {
             let (sk, vk) = crypto::generate_keypair();
             let pub_b64 = crypto::encode_public_key(&vk);
@@ -68,7 +70,15 @@ pub fn execute(
             let (ed_sk, ed_vk) = crypto::generate_keypair();
             let ed_pub_b64 = crypto::encode_public_key(&ed_vk);
 
-            let card = build_rotated_card(&old_card, &ed_pub_b64, Some(&pq_pub_b64), "", None, now, duration);
+            let card = build_rotated_card(
+                &old_card,
+                &ed_pub_b64,
+                Some(&pq_pub_b64),
+                "",
+                None,
+                now,
+                duration,
+            );
             let payload = card_signing_payload(&card)?;
             let pq_sig = crypto::mldsa_sign(&mldsa_kp.secret_key_bytes, payload.as_bytes())?;
             let ed_sig = crypto::sign(&ed_sk, payload.as_bytes());
@@ -81,12 +91,28 @@ pub fn execute(
             let ed_pub_b64 = crypto::encode_public_key(&hkp.ed25519_verifying);
             let pq_pub_b64 = crypto::encode_mldsa_public_key(&hkp.mldsa_public);
 
-            let card = build_rotated_card(&old_card, &ed_pub_b64, Some(&pq_pub_b64), "", None, now, duration);
+            let card = build_rotated_card(
+                &old_card,
+                &ed_pub_b64,
+                Some(&pq_pub_b64),
+                "",
+                None,
+                now,
+                duration,
+            );
             let payload = card_signing_payload(&card)?;
-            let hsig = crypto::hybrid_sign(&hkp.ed25519_signing, &hkp.mldsa_secret, payload.as_bytes())?;
-            let pem = crypto::encode_hybrid_private_key_pem(&hkp.ed25519_signing, &hkp.mldsa_secret);
+            let hsig =
+                crypto::hybrid_sign(&hkp.ed25519_signing, &hkp.mldsa_secret, payload.as_bytes())?;
+            let pem =
+                crypto::encode_hybrid_private_key_pem(&hkp.ed25519_signing, &hkp.mldsa_secret);
 
-            (ed_pub_b64, Some(pq_pub_b64), hsig.ed25519, Some(hsig.mldsa65), pem)
+            (
+                ed_pub_b64,
+                Some(pq_pub_b64),
+                hsig.ed25519,
+                Some(hsig.mldsa65),
+                pem,
+            )
         }
     };
 
@@ -109,8 +135,12 @@ pub fn execute(
     };
 
     // Archive old key
-    fs::create_dir_all(output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
 
     let archive_name = format!("agent-key.pem.{}", now.format("%Y%m%d-%H%M%S"));
     let archive_path = output_dir.join(&archive_name);
@@ -142,7 +172,11 @@ pub fn execute(
         &conn,
         &old_card.id,
         "rotate",
-        &format!("old_key={}... new_key={}...", &old_pub_b64[..16], &new_card.public_key[..16]),
+        &format!(
+            "old_key={}... new_key={}...",
+            &old_pub_b64[..16],
+            &new_card.public_key[..16]
+        ),
         &old_ed_key,
     )?;
 
@@ -159,7 +193,10 @@ pub fn execute(
     println!("  Key:         {}", key_out.display());
     println!("  Archived:    {}", archive_path.display());
     println!();
-    println!("  ⚠️  Old key archived to {}. Delete it after confirming the new key works.", archive_name);
+    println!(
+        "  ⚠️  Old key archived to {}. Delete it after confirming the new key works.",
+        archive_name
+    );
 
     Ok(())
 }

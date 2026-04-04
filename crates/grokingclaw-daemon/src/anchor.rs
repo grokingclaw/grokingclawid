@@ -191,31 +191,33 @@ fn get_pending_anchors(conn: &Connection) -> Result<Vec<BreadcrumbAnchor>> {
          ORDER BY id ASC LIMIT 10"
     )?;
 
-    let anchors = stmt.query_map([], |row| {
-        let agent_ids_json: String = row.get(3)?;
-        let status_str: String = row.get(8)?;
-        let computed_at_str: String = row.get(6)?;
+    let anchors = stmt
+        .query_map([], |row| {
+            let agent_ids_json: String = row.get(3)?;
+            let status_str: String = row.get(8)?;
+            let computed_at_str: String = row.get(6)?;
 
-        Ok(BreadcrumbAnchor {
-            id: row.get(0)?,
-            merkle_root: row.get(1)?,
-            entry_count: row.get(2)?,
-            agent_ids: serde_json::from_str(&agent_ids_json).unwrap_or_default(),
-            first_entry_at: row.get(4)?,
-            last_entry_at: row.get(5)?,
-            computed_at: chrono::DateTime::parse_from_rfc3339(&computed_at_str)
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now()),
-            iota_tx_digest: row.get(7)?,
-            status: match status_str.as_str() {
-                "submitted" => AnchorStatus::Submitted,
-                "confirmed" => AnchorStatus::Confirmed,
-                "failed" => AnchorStatus::Failed,
-                _ => AnchorStatus::Pending,
-            },
-        })
-    })?.collect::<Result<Vec<_>, _>>()
-    .context("Failed to query pending anchors")?;
+            Ok(BreadcrumbAnchor {
+                id: row.get(0)?,
+                merkle_root: row.get(1)?,
+                entry_count: row.get(2)?,
+                agent_ids: serde_json::from_str(&agent_ids_json).unwrap_or_default(),
+                first_entry_at: row.get(4)?,
+                last_entry_at: row.get(5)?,
+                computed_at: chrono::DateTime::parse_from_rfc3339(&computed_at_str)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+                iota_tx_digest: row.get(7)?,
+                status: match status_str.as_str() {
+                    "submitted" => AnchorStatus::Submitted,
+                    "confirmed" => AnchorStatus::Confirmed,
+                    "failed" => AnchorStatus::Failed,
+                    _ => AnchorStatus::Pending,
+                },
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to query pending anchors")?;
 
     Ok(anchors)
 }
@@ -251,12 +253,14 @@ fn read_audit_hashes(
         .with_context(|| format!("Failed to open audit DB: {}", audit_db_path.display()))?;
 
     // Check if the table exists
-    let table_exists: bool = conn.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='audit_log'",
-        [],
-        |row| row.get::<_, i64>(0),
-    ).map(|count| count > 0)
-    .unwrap_or(false);
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='audit_log'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)
+        .unwrap_or(false);
 
     if !table_exists {
         return Ok(vec![]);
@@ -264,17 +268,19 @@ fn read_audit_hashes(
 
     let mut stmt = conn.prepare(
         "SELECT entry_hash, agent_id, timestamp FROM audit_log
-         WHERE timestamp > ?1 ORDER BY id ASC"
+         WHERE timestamp > ?1 ORDER BY id ASC",
     )?;
 
-    let entries = stmt.query_map(params![since_timestamp], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i64>(2)?,
-        ))
-    })?.collect::<Result<Vec<_>, _>>()
-    .context("Failed to read audit entries")?;
+    let entries = stmt
+        .query_map(params![since_timestamp], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to read audit entries")?;
 
     Ok(entries)
 }
@@ -283,11 +289,7 @@ fn read_audit_hashes(
 
 impl AnchorWorker {
     /// Create a new anchor worker.
-    pub fn new(
-        config: DaemonConfig,
-        agents_dir: PathBuf,
-        state_dir: PathBuf,
-    ) -> Self {
+    pub fn new(config: DaemonConfig, agents_dir: PathBuf, state_dir: PathBuf) -> Self {
         let state_db_path = state_dir.join("breadcrumb-anchor.db");
         Self {
             config,
@@ -400,12 +402,20 @@ impl AnchorWorker {
             return Ok(());
         }
 
-        tracing::info!(count = pending.len(), "Attempting to submit pending anchors to IOTA");
+        tracing::info!(
+            count = pending.len(),
+            "Attempting to submit pending anchors to IOTA"
+        );
 
         for anchor in &pending {
             match self.submit_to_iota(anchor).await {
                 Ok(tx_digest) => {
-                    update_anchor_status(&conn, anchor.id, AnchorStatus::Submitted, Some(&tx_digest))?;
+                    update_anchor_status(
+                        &conn,
+                        anchor.id,
+                        AnchorStatus::Submitted,
+                        Some(&tx_digest),
+                    )?;
                     tracing::info!(
                         anchor_id = anchor.id,
                         tx_digest = %tx_digest,
@@ -441,10 +451,11 @@ impl AnchorWorker {
     /// providing a permanent, globally-verifiable proof that the local
     /// audit log existed at this point in time.
     async fn submit_to_iota(&self, anchor: &BreadcrumbAnchor) -> Result<String> {
-        use grokingclawid_core::iota::{IotaClient, derive_iota_address};
+        use grokingclawid_core::iota::{derive_iota_address, IotaClient};
 
         // 1. Load daemon signing key
-        let daemon_key_path = self.agents_dir
+        let daemon_key_path = self
+            .agents_dir
             .parent()
             .unwrap_or(&self.agents_dir)
             .join("identity")
@@ -482,18 +493,22 @@ impl AnchorWorker {
         let amount = 1u64; // Minimum transfer — the tx itself is the proof
         let gas_budget = 10_000_000u64; // 10M NANOS gas budget
 
-        let tx_digest = client.transfer_iota(
-            &signing_key,
-            &sender,
-            &sender, // Self-transfer — we just need the tx on-chain
-            amount,
-            gas_budget,
-        ).await.with_context(|| format!(
-            "IOTA anchor submission failed (merkle_root={}, {} entries). \
+        let tx_digest = client
+            .transfer_iota(
+                &signing_key,
+                &sender,
+                &sender, // Self-transfer — we just need the tx on-chain
+                amount,
+                gas_budget,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "IOTA anchor submission failed (merkle_root={}, {} entries). \
              Ensure the daemon wallet is funded via `grokingclawid wallet faucet`.",
-            anchor.merkle_root,
-            anchor.entry_count
-        ))?;
+                    anchor.merkle_root, anchor.entry_count
+                )
+            })?;
 
         tracing::info!(
             merkle_root = %anchor.merkle_root,
@@ -513,11 +528,10 @@ impl AnchorWorker {
 
         let conn = open_state_db(&self.state_db_path)?;
 
-        let result: Result<i64, rusqlite::Error> = conn.query_row(
-            "SELECT MAX(last_entry_at) FROM anchors",
-            [],
-            |row| row.get(0),
-        );
+        let result: Result<i64, rusqlite::Error> =
+            conn.query_row("SELECT MAX(last_entry_at) FROM anchors", [], |row| {
+                row.get(0)
+            });
 
         match result {
             Ok(ts) => Ok(ts),
@@ -544,9 +558,8 @@ impl AnchorWorker {
 
     /// Run the background anchoring loop.
     pub async fn run_loop(self: Arc<Self>, mut shutdown: tokio::sync::watch::Receiver<bool>) {
-        let interval = std::time::Duration::from_secs(
-            self.config.anchoring.interval_minutes as u64 * 60
-        );
+        let interval =
+            std::time::Duration::from_secs(self.config.anchoring.interval_minutes as u64 * 60);
 
         // Initial delay to let agents start
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
@@ -620,11 +633,7 @@ mod tests {
     #[test]
     fn test_merkle_root_odd() {
         // Odd number: last hash gets duplicated
-        let hashes = vec![
-            "x".to_string(),
-            "y".to_string(),
-            "z".to_string(),
-        ];
+        let hashes = vec!["x".to_string(), "y".to_string(), "z".to_string()];
         let root = compute_merkle_root(&hashes);
 
         let h_xy = sha256_hex(b"xy");

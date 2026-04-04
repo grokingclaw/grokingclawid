@@ -155,36 +155,43 @@ pub struct BirthParams {
 impl BirthParams {
     /// Parse BirthParams from a JSON value (IPC request params).
     pub fn from_json(params: &serde_json::Value) -> Result<Self> {
-        let template = params.get("template")
+        let template = params
+            .get("template")
             .and_then(|v| v.as_str())
             .context("Missing 'template' parameter")?
             .to_string();
 
-        let name = params.get("name")
+        let name = params
+            .get("name")
             .and_then(|v| v.as_str())
             .context("Missing 'name' parameter")?
             .to_string();
 
-        let allowed_domains: Vec<String> = params.get("scope")
+        let allowed_domains: Vec<String> = params
+            .get("scope")
             .and_then(|s| s.get("allowed_domains"))
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default();
 
-        let allowed_scopes: Vec<String> = params.get("scope")
+        let allowed_scopes: Vec<String> = params
+            .get("scope")
             .and_then(|s| s.get("allowed_scopes"))
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_else(|| vec!["*".to_string()]);
 
-        let ttl_seconds: i64 = params.get("scope")
+        let ttl_seconds: i64 = params
+            .get("scope")
             .and_then(|s| s.get("ttl_seconds"))
             .and_then(|v| v.as_i64())
             .unwrap_or(30 * 24 * 3600);
 
-        let model = params.get("model")
+        let model = params
+            .get("model")
             .and_then(|v| serde_json::from_value::<ModelConfig>(v.clone()).ok())
             .unwrap_or_default();
 
-        let resources = params.get("resources")
+        let resources = params
+            .get("resources")
             .and_then(|v| serde_json::from_value::<ResourceConfig>(v.clone()).ok())
             .unwrap_or_default();
 
@@ -245,7 +252,8 @@ pub async fn birth_agent(
             if let Err(e) = license::check_feature(LicenseFeature::BirthMesh, &lic) {
                 tracing::info!(
                     "Mesh birth not available on {} tier: {}. Using local birth.",
-                    lic.tier, e
+                    lic.tier,
+                    e
                 );
             } else {
                 match birth_via_mesh(config, root_dir, mesh, templates, &params).await {
@@ -276,7 +284,6 @@ async fn birth_via_mesh(
     templates: &TemplateRegistry,
     params: &BirthParams,
 ) -> Result<BirthResult> {
-
     // Generate agent keypair
     let (signing_key, verifying_key) = grokingclawid_core::crypto::generate_keypair();
     let agent_public_key = grokingclawid_core::crypto::encode_public_key(&verifying_key);
@@ -302,7 +309,8 @@ async fn birth_via_mesh(
         "unsigned".to_string()
     };
 
-    let template_version = templates.get_template_version(&params.template)
+    let template_version = templates
+        .get_template_version(&params.template)
         .unwrap_or_else(|| "latest".to_string());
 
     let birth_request = BirthRequest {
@@ -339,7 +347,8 @@ async fn birth_via_mesh(
         .build()
         .unwrap_or_default();
 
-    let resp = http.post(&url)
+    let resp = http
+        .post(&url)
         .json(&birth_request)
         .send()
         .await
@@ -350,16 +359,18 @@ async fn birth_via_mesh(
         let body = resp.text().await.unwrap_or_default();
         anyhow::bail!(
             "Birth request rejected by coordination server (HTTP {}): {}",
-            status, body
+            status,
+            body
         );
     }
 
     // Parse birth certificate from response
-    let certificate: BirthCertificate = resp.json().await
+    let certificate: BirthCertificate = resp
+        .json()
+        .await
         .context("Failed to parse birth certificate response")?;
 
-    let agent_id = Uuid::parse_str(&certificate.agent_id)
-        .unwrap_or_else(|_| Uuid::new_v4());
+    let agent_id = Uuid::parse_str(&certificate.agent_id).unwrap_or_else(|_| Uuid::new_v4());
     let expires_at = certificate.expires_at;
 
     // Save birth certificate
@@ -416,10 +427,9 @@ async fn birth_via_mesh(
     templates.install_for_agent(&params.template, &agent_dir)?;
 
     // Register agent on mesh
-    mesh.register_agent(
-        &agent_id.to_string(),
-        &certificate.agent_did,
-    ).await.ok(); // Non-fatal
+    mesh.register_agent(&agent_id.to_string(), &certificate.agent_did)
+        .await
+        .ok(); // Non-fatal
 
     let agent_info = AgentInfo {
         name: params.name.clone(),
@@ -455,7 +465,6 @@ async fn birth_local(
     templates: &TemplateRegistry,
     params: &BirthParams,
 ) -> Result<BirthResult> {
-
     let agent_id = Uuid::new_v4();
     let now = Utc::now();
     let expires_at = now + chrono::Duration::seconds(params.ttl_seconds);
@@ -564,10 +573,7 @@ async fn birth_local(
 
 /// Queue a birth request for later processing when mesh becomes available.
 #[allow(dead_code)]
-pub async fn queue_birth(
-    root_dir: &Path,
-    params: &BirthParams,
-) -> Result<()> {
+pub async fn queue_birth(root_dir: &Path, params: &BirthParams) -> Result<()> {
     let queue_dir = root_dir.join("state").join("birth-queue");
     std::fs::create_dir_all(&queue_dir)?;
 
@@ -595,7 +601,9 @@ fn get_daemon_did(root_dir: &Path) -> Option<String> {
     let card_path = root_dir.join("identity").join("daemon.card.json");
     let content = std::fs::read_to_string(&card_path).ok()?;
     let card: serde_json::Value = serde_json::from_str(&content).ok()?;
-    card.get("did").and_then(|v| v.as_str()).map(|s| s.to_string())
+    card.get("did")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────
@@ -663,7 +671,11 @@ mod tests {
             expires_at: Utc::now() + chrono::Duration::days(30),
             issuer_signature: "sig-placeholder".to_string(),
             validator_ref: "val-001".to_string(),
-            trust_chain: vec!["daemon".to_string(), "issuer".to_string(), "validator".to_string()],
+            trust_chain: vec![
+                "daemon".to_string(),
+                "issuer".to_string(),
+                "validator".to_string(),
+            ],
         };
 
         let json = serde_json::to_string(&cert).unwrap();
@@ -718,7 +730,13 @@ fn canonical_json_string(value: &serde_json::Value) -> String {
             entries.sort_by_key(|(k, _)| *k);
             let inner: Vec<String> = entries
                 .iter()
-                .map(|(k, v)| format!("{}:{}", serde_json::to_string(k).unwrap(), canonical_json_string(v)))
+                .map(|(k, v)| {
+                    format!(
+                        "{}:{}",
+                        serde_json::to_string(k).unwrap(),
+                        canonical_json_string(v)
+                    )
+                })
                 .collect();
             format!("{{{}}}", inner.join(","))
         }

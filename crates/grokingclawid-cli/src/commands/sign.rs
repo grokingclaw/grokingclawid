@@ -30,7 +30,8 @@ pub fn execute_sign(
     let parsed_headers: Vec<(String, String)> = headers
         .iter()
         .filter_map(|h| {
-            h.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            h.split_once(':')
+                .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         })
         .collect();
 
@@ -42,11 +43,7 @@ pub fn execute_sign(
     };
 
     // Build components: always sign method + authority + path, plus any provided headers
-    let mut components = vec![
-        Component::Method,
-        Component::Authority,
-        Component::Path,
-    ];
+    let mut components = vec![Component::Method, Component::Authority, Component::Path];
     for (name, _) in &parsed_headers {
         components.push(Component::Header(name.to_lowercase()));
     }
@@ -134,7 +131,8 @@ pub fn execute_verify(
     let parsed_headers: Vec<(String, String)> = headers
         .iter()
         .filter_map(|h| {
-            h.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            h.split_once(':')
+                .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         })
         .collect();
 
@@ -149,7 +147,9 @@ pub fn execute_verify(
     println!("═══════════════════════════════════════");
 
     let result = if let Some(pq_sig) = pq_signature {
-        let pq_pub = card.pq_public_key.as_ref()
+        let pq_pub = card
+            .pq_public_key
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Card has no PQ public key for hybrid verification"))?;
         httpsig::verify_request_hybrid(
             &request,
@@ -160,15 +160,14 @@ pub fn execute_verify(
             pq_pub,
         )?
     } else {
-        httpsig::verify_request(
-            &request,
-            signature_input,
-            signature,
-            &card.public_key,
-        )?
+        httpsig::verify_request(&request, signature_input, signature, &card.public_key)?
     };
 
-    let ed_status = if result.ed25519_valid { "✅ VALID" } else { "❌ INVALID" };
+    let ed_status = if result.ed25519_valid {
+        "✅ VALID"
+    } else {
+        "❌ INVALID"
+    };
     println!("  Ed25519:   {}", ed_status);
 
     if let Some(pq_valid) = result.mldsa65_valid {
@@ -183,9 +182,7 @@ pub fn execute_verify(
         println!("  ⚠️  Signature has EXPIRED");
     }
 
-    let overall = result.ed25519_valid
-        && result.mldsa65_valid.unwrap_or(true)
-        && !result.expired;
+    let overall = result.ed25519_valid && result.mldsa65_valid.unwrap_or(true) && !result.expired;
 
     println!();
     if overall {

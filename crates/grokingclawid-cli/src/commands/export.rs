@@ -19,18 +19,16 @@ pub fn execute(card_path: &Path, base_url: &str, output: Option<&Path>) -> Resul
 
     // Convert to A2A format
     let a2a_card = card.to_a2a(base_url);
-    let a2a_json = serde_json::to_string_pretty(&a2a_card)
-        .context("Failed to serialize A2A agent card")?;
+    let a2a_json =
+        serde_json::to_string_pretty(&a2a_card).context("Failed to serialize A2A agent card")?;
 
     // Write output
-    let out_path = output
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| {
-            card_path
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join("a2a-agent-card.json")
-        });
+    let out_path = output.map(|p| p.to_path_buf()).unwrap_or_else(|| {
+        card_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("a2a-agent-card.json")
+    });
 
     fs::write(&out_path, &a2a_json)
         .with_context(|| format!("Failed to write {}", out_path.display()))?;

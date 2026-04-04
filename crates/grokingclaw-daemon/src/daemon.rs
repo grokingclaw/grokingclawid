@@ -66,10 +66,7 @@ impl DaemonState {
     ///
     /// Delegates to birth::birth_agent which handles mesh vs local birth.
     /// Enforces license limits before allowing agent creation.
-    pub async fn birth_agent(
-        &self,
-        params: BirthParams,
-    ) -> Result<BirthResult> {
+    pub async fn birth_agent(&self, params: BirthParams) -> Result<BirthResult> {
         // Check if agent already exists
         if self.supervisor.get_agent(&params.name).await.is_some() {
             anyhow::bail!("Agent '{}' already exists", params.name);
@@ -98,7 +95,8 @@ impl DaemonState {
             mesh_ref,
             &self.templates,
             params,
-        ).await?;
+        )
+        .await?;
 
         // Register agent with supervisor (loads agent.toml that was created during birth)
         let agent_dir = self.root_dir.join("agents").join(&result.agent_info.name);
@@ -115,25 +113,30 @@ impl DaemonState {
 
     /// Read the last N lines of an agent's logs.
     pub async fn read_agent_logs(&self, name: &str, lines: usize) -> Result<String> {
-        let log_path = self.root_dir.join("agents").join(name).join("logs").join("stdout.log");
+        let log_path = self
+            .root_dir
+            .join("agents")
+            .join(name)
+            .join("logs")
+            .join("stdout.log");
         if !log_path.exists() {
             return Ok(String::new());
         }
 
         let content = std::fs::read_to_string(&log_path)?;
         let all_lines: Vec<&str> = content.lines().collect();
-        let start = if all_lines.len() > lines { all_lines.len() - lines } else { 0 };
+        let start = if all_lines.len() > lines {
+            all_lines.len() - lines
+        } else {
+            0
+        };
         Ok(all_lines[start..].join("\n"))
     }
 
     /// Query audit entries for an agent.
-    pub async fn query_audit(
-        &self,
-        agent_name: &str,
-        last: u64,
-        verify: bool,
-    ) -> Result<Value> {
-        let audit_db_path = self.root_dir
+    pub async fn query_audit(&self, agent_name: &str, last: u64, verify: bool) -> Result<Value> {
+        let audit_db_path = self
+            .root_dir
             .join("agents")
             .join(agent_name)
             .join("audit")
@@ -150,18 +153,17 @@ impl DaemonState {
 
         // Query entries for this agent
         let agent_info = self.supervisor.get_agent(agent_name).await;
-        let agent_id_str = agent_info
-            .as_ref()
-            .map(|a| a.agent_id.to_string());
+        let agent_id_str = agent_info.as_ref().map(|a| a.agent_id.to_string());
 
-        let entries = grokingclawid_core::audit::query_entries(
-            &conn,
-            agent_id_str.as_deref(),
-            None,
-        )?;
+        let entries =
+            grokingclawid_core::audit::query_entries(&conn, agent_id_str.as_deref(), None)?;
 
         // Take last N entries
-        let start = if entries.len() > last as usize { entries.len() - last as usize } else { 0 };
+        let start = if entries.len() > last as usize {
+            entries.len() - last as usize
+        } else {
+            0
+        };
         let recent = &entries[start..];
 
         let mut result = serde_json::json!({
@@ -233,8 +235,7 @@ pub fn check_already_running(path: &std::path::Path) -> Result<Option<u32>> {
     }
 
     let pid_str = std::fs::read_to_string(path)?;
-    let pid: u32 = pid_str.trim().parse()
-        .context("Invalid PID in file")?;
+    let pid: u32 = pid_str.trim().parse().context("Invalid PID in file")?;
 
     // Check if process is alive (signal 0 = existence check)
     #[cfg(unix)]

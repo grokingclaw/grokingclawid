@@ -3,8 +3,8 @@
 use anyhow::Result;
 use chrono::DateTime;
 
-use grokingclawid_core::audit as audit_db;
 use crate::commands::issue::parse_ttl;
+use grokingclawid_core::audit as audit_db;
 
 /// Execute the `audit` command.
 ///

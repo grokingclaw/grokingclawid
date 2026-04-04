@@ -50,7 +50,10 @@ impl ProxyAuditLogger {
             entry.method,
             entry.url,
             entry.scope_decision,
-            entry.status_code.map(|c| c.to_string()).unwrap_or_else(|| "-".into()),
+            entry
+                .status_code
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "-".into()),
             entry.request_size_bytes,
             entry.response_size_bytes,
             entry.duration_ms,

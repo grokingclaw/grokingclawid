@@ -278,14 +278,17 @@ async fn main() -> Result<()> {
             cmd_ipc("birth", params, &config).await
         }
         Commands::Agents { action } => match action {
-            AgentsAction::List => {
-                cmd_ipc("agents.list", serde_json::json!({}), &config).await
-            }
+            AgentsAction::List => cmd_ipc("agents.list", serde_json::json!({}), &config).await,
             AgentsAction::Inspect { name } => {
                 cmd_ipc("agents.get", serde_json::json!({"name": name}), &config).await
             }
             AgentsAction::Logs { name, lines } => {
-                cmd_ipc("agents.logs", serde_json::json!({"name": name, "lines": lines}), &config).await
+                cmd_ipc(
+                    "agents.logs",
+                    serde_json::json!({"name": name, "lines": lines}),
+                    &config,
+                )
+                .await
             }
             AgentsAction::Start { name } => {
                 cmd_ipc("agents.start", serde_json::json!({"name": name}), &config).await
@@ -295,7 +298,10 @@ async fn main() -> Result<()> {
             }
             AgentsAction::Delete { name, force } => {
                 if !force {
-                    eprintln!("Are you sure you want to delete agent '{}'? This removes all data.", name);
+                    eprintln!(
+                        "Are you sure you want to delete agent '{}'? This removes all data.",
+                        name
+                    );
                     eprintln!("Use --force to skip this confirmation.");
                     std::process::exit(1);
                 }
@@ -303,18 +309,12 @@ async fn main() -> Result<()> {
             }
         },
         Commands::Mesh { action } => match action {
-            MeshAction::Status => {
-                cmd_ipc("mesh.status", serde_json::json!({}), &config).await
-            }
-            MeshAction::Connect => {
-                cmd_ipc("mesh.connect", serde_json::json!({}), &config).await
-            }
+            MeshAction::Status => cmd_ipc("mesh.status", serde_json::json!({}), &config).await,
+            MeshAction::Connect => cmd_ipc("mesh.connect", serde_json::json!({}), &config).await,
             MeshAction::Disconnect => {
                 cmd_ipc("mesh.disconnect", serde_json::json!({}), &config).await
             }
-            MeshAction::Peers => {
-                cmd_ipc("mesh.peers", serde_json::json!({}), &config).await
-            }
+            MeshAction::Peers => cmd_ipc("mesh.peers", serde_json::json!({}), &config).await,
             MeshAction::Ping { did } => {
                 cmd_ipc("mesh.ping", serde_json::json!({"did": did}), &config).await
             }
@@ -324,41 +324,49 @@ async fn main() -> Result<()> {
                 cmd_ipc("templates.list", serde_json::json!({}), &config).await
             }
             TemplatesAction::Inspect { name } => {
-                cmd_ipc("templates.inspect", serde_json::json!({"name": name}), &config).await
+                cmd_ipc(
+                    "templates.inspect",
+                    serde_json::json!({"name": name}),
+                    &config,
+                )
+                .await
             }
             TemplatesAction::Install { name, version } => {
-                cmd_ipc("templates.install", serde_json::json!({"name": name, "version": version}), &config).await
+                cmd_ipc(
+                    "templates.install",
+                    serde_json::json!({"name": name, "version": version}),
+                    &config,
+                )
+                .await
             }
             TemplatesAction::Create { name, source } => {
-                cmd_ipc("templates.create", serde_json::json!({"name": name, "source": source.to_string_lossy()}), &config).await
+                cmd_ipc(
+                    "templates.create",
+                    serde_json::json!({"name": name, "source": source.to_string_lossy()}),
+                    &config,
+                )
+                .await
             }
         },
         Commands::Audit { name, last, verify } => {
-            cmd_ipc("audit.query", serde_json::json!({"name": name, "last": last, "verify": verify}), &config).await
+            cmd_ipc(
+                "audit.query",
+                serde_json::json!({"name": name, "last": last, "verify": verify}),
+                &config,
+            )
+            .await
         }
-        Commands::License => {
-            cmd_ipc("license.status", serde_json::json!({}), &config).await
-        }
+        Commands::License => cmd_ipc("license.status", serde_json::json!({}), &config).await,
         Commands::Update { action } => match action {
-            UpdateAction::Check => {
-                cmd_ipc("update.check", serde_json::json!({}), &config).await
-            }
-            UpdateAction::Apply => {
-                cmd_ipc("update.apply", serde_json::json!({}), &config).await
-            }
-            UpdateAction::Status => {
-                cmd_ipc("update.status", serde_json::json!({}), &config).await
-            }
+            UpdateAction::Check => cmd_ipc("update.check", serde_json::json!({}), &config).await,
+            UpdateAction::Apply => cmd_ipc("update.apply", serde_json::json!({}), &config).await,
+            UpdateAction::Status => cmd_ipc("update.status", serde_json::json!({}), &config).await,
         },
     }
 }
 
 /// Start the daemon.
-async fn cmd_start(
-    config: config::DaemonConfig,
-    root: PathBuf,
-    foreground: bool,
-) -> Result<()> {
+async fn cmd_start(config: config::DaemonConfig, root: PathBuf, foreground: bool) -> Result<()> {
     // Check if already running (before fork)
     let pid_path = config.pid_path()?;
 
@@ -386,7 +394,7 @@ async fn cmd_start(
         let stderr_file = log_file.try_clone()?;
 
         let child = std::process::Command::new(exe)
-            .args(&args[1..])  // skip argv[0]
+            .args(&args[1..]) // skip argv[0]
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::from(log_file))
             .stderr(std::process::Stdio::from(stderr_file))
@@ -404,7 +412,7 @@ async fn cmd_start(
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| config.daemon.log_level.parse().unwrap_or_default())
+                .unwrap_or_else(|_| config.daemon.log_level.parse().unwrap_or_default()),
         )
         .init();
 
@@ -550,7 +558,10 @@ async fn cmd_start(
         println!("   Mesh:   {}", config.mesh.coordination_server);
     }
     if config.anchoring.enabled {
-        println!("   Anchor: every {}m, batch {}", config.anchoring.interval_minutes, config.anchoring.batch_size);
+        println!(
+            "   Anchor: every {}m, batch {}",
+            config.anchoring.interval_minutes, config.anchoring.batch_size
+        );
     }
 
     // Main loop: health checks + restart agents
@@ -628,7 +639,8 @@ async fn cmd_ipc(
     let response: serde_json::Value = serde_json::from_str(response_line.trim())?;
 
     if let Some(error) = response.get("error") {
-        let message = error.get("message")
+        let message = error
+            .get("message")
             .and_then(|m| m.as_str())
             .unwrap_or("Unknown error");
         eprintln!("Error: {}", message);
@@ -666,18 +678,46 @@ async fn cmd_ipc(
 /// Pretty-print daemon status.
 fn print_status(v: &serde_json::Value) {
     println!("\u{1f980} GrokingClaw Daemon");
-    println!("   Status:  {}", v.get("daemon").and_then(|d| d.as_str()).unwrap_or("unknown"));
-    println!("   Version: {}", v.get("version").and_then(|d| d.as_str()).unwrap_or("?"));
-    println!("   Uptime:  {}s", v.get("uptime_seconds").and_then(|d| d.as_u64()).unwrap_or(0));
-    println!("   Agents:  {}", v.get("agents_count").and_then(|d| d.as_u64()).unwrap_or(0));
+    println!(
+        "   Status:  {}",
+        v.get("daemon")
+            .and_then(|d| d.as_str())
+            .unwrap_or("unknown")
+    );
+    println!(
+        "   Version: {}",
+        v.get("version").and_then(|d| d.as_str()).unwrap_or("?")
+    );
+    println!(
+        "   Uptime:  {}s",
+        v.get("uptime_seconds")
+            .and_then(|d| d.as_u64())
+            .unwrap_or(0)
+    );
+    println!(
+        "   Agents:  {}",
+        v.get("agents_count").and_then(|d| d.as_u64()).unwrap_or(0)
+    );
     if let Some(mesh) = v.get("mesh") {
-        println!("   Mesh:    {}", mesh.get("state").and_then(|s| s.as_str()).unwrap_or("disabled"));
+        println!(
+            "   Mesh:    {}",
+            mesh.get("state")
+                .and_then(|s| s.as_str())
+                .unwrap_or("disabled")
+        );
     }
     if let Some(anchor) = v.get("anchor") {
-        let enabled = anchor.get("enabled").and_then(|e| e.as_bool()).unwrap_or(false);
+        let enabled = anchor
+            .get("enabled")
+            .and_then(|e| e.as_bool())
+            .unwrap_or(false);
         if enabled {
-            println!("   Anchor:  enabled (pending: {})",
-                anchor.get("pending_count").and_then(|p| p.as_u64()).unwrap_or(0)
+            println!(
+                "   Anchor:  enabled (pending: {})",
+                anchor
+                    .get("pending_count")
+                    .and_then(|p| p.as_u64())
+                    .unwrap_or(0)
             );
         }
     }
@@ -703,8 +743,16 @@ fn print_status(v: &serde_json::Value) {
 /// Pretty-print license status.
 fn print_license_status(v: &serde_json::Value) {
     println!("🔑 License Status");
-    println!("   Tier:     {}", v.get("tier").and_then(|t| t.as_str()).unwrap_or("Free"));
-    println!("   Licensee: {}", v.get("licensee").and_then(|l| l.as_str()).unwrap_or("(free tier)"));
+    println!(
+        "   Tier:     {}",
+        v.get("tier").and_then(|t| t.as_str()).unwrap_or("Free")
+    );
+    println!(
+        "   Licensee: {}",
+        v.get("licensee")
+            .and_then(|l| l.as_str())
+            .unwrap_or("(free tier)")
+    );
 
     let agent_count = v.get("agent_count").and_then(|a| a.as_u64()).unwrap_or(0);
     let max_agents = v.get("max_agents").and_then(|m| m.as_u64());
@@ -729,9 +777,7 @@ fn print_license_status(v: &serde_json::Value) {
         if features.is_empty() {
             println!("   Features: (none — upgrade at https://grokingclaw.com)");
         } else {
-            let names: Vec<&str> = features.iter()
-                .filter_map(|f| f.as_str())
-                .collect();
+            let names: Vec<&str> = features.iter().filter_map(|f| f.as_str()).collect();
             println!("   Features: {}", names.join(", "));
         }
     }
@@ -752,25 +798,40 @@ fn print_agents_list(v: &serde_json::Value) {
         return;
     }
 
-    println!("{:<20} {:<12} {:<10} {:<8} {:<20}",
-        "NAME", "TEMPLATE", "STATUS", "PID", "CREATED");
+    println!(
+        "{:<20} {:<12} {:<10} {:<8} {:<20}",
+        "NAME", "TEMPLATE", "STATUS", "PID", "CREATED"
+    );
     println!("{}", "-".repeat(70));
 
     for agent in agents {
         let name = agent.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-        let template = agent.get("template").and_then(|t| t.as_str()).unwrap_or("?");
+        let template = agent
+            .get("template")
+            .and_then(|t| t.as_str())
+            .unwrap_or("?");
         let status = agent.get("status").and_then(|s| s.as_str()).unwrap_or("?");
-        let pid = agent.get("pid")
+        let pid = agent
+            .get("pid")
             .and_then(|p| p.as_u64())
             .map(|p| p.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let created = agent.get("created_at")
+        let created = agent
+            .get("created_at")
             .and_then(|c| c.as_str())
-            .map(|c| if c.len() >= 19 { c[..19].replace('T', " ") } else { c.to_string() })
+            .map(|c| {
+                if c.len() >= 19 {
+                    c[..19].replace('T', " ")
+                } else {
+                    c.to_string()
+                }
+            })
             .unwrap_or_else(|| "?".to_string());
 
-        println!("{:<20} {:<12} {:<10} {:<8} {:<20}",
-            name, template, status, pid, created);
+        println!(
+            "{:<20} {:<12} {:<10} {:<8} {:<20}",
+            name, template, status, pid, created
+        );
     }
 }
 
@@ -779,7 +840,10 @@ fn print_birth_result(v: &serde_json::Value) {
     let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("?");
     let agent_id = v.get("agent_id").and_then(|a| a.as_str()).unwrap_or("?");
     let template = v.get("template").and_then(|t| t.as_str()).unwrap_or("?");
-    let mode = v.get("birth_mode").and_then(|m| m.as_str()).unwrap_or("local");
+    let mode = v
+        .get("birth_mode")
+        .and_then(|m| m.as_str())
+        .unwrap_or("local");
 
     println!("  \u{2713} Agent '{}' birthed ({} mode)", name, mode);
     println!("  \u{2713} Template: {}", template);
@@ -821,15 +885,20 @@ fn print_mesh_peers(v: &serde_json::Value) {
         return;
     }
 
-    println!("{:<20} {:<30} {:<16} {:<8}",
-        "NAME", "DID", "MESH IP", "AGENTS");
+    println!(
+        "{:<20} {:<30} {:<16} {:<8}",
+        "NAME", "DID", "MESH IP", "AGENTS"
+    );
     println!("{}", "-".repeat(74));
 
     for peer in peers {
         let name = peer.get("name").and_then(|n| n.as_str()).unwrap_or("?");
         let did = peer.get("did").and_then(|d| d.as_str()).unwrap_or("?");
         let ip = peer.get("mesh_ip").and_then(|i| i.as_str()).unwrap_or("?");
-        let agents = peer.get("agent_count").and_then(|a| a.as_u64()).unwrap_or(0);
+        let agents = peer
+            .get("agent_count")
+            .and_then(|a| a.as_u64())
+            .unwrap_or(0);
         println!("{:<20} {:<30} {:<16} {:<8}", name, did, ip, agents);
     }
 }
@@ -849,14 +918,16 @@ fn print_templates_list(v: &serde_json::Value) {
         return;
     }
 
-    println!("{:<20} {:<12} {:<40}",
-        "NAME", "VERSION", "DESCRIPTION");
+    println!("{:<20} {:<12} {:<40}", "NAME", "VERSION", "DESCRIPTION");
     println!("{}", "-".repeat(72));
 
     for tmpl in templates {
         let name = tmpl.get("name").and_then(|n| n.as_str()).unwrap_or("?");
         let version = tmpl.get("version").and_then(|v| v.as_str()).unwrap_or("?");
-        let desc = tmpl.get("description").and_then(|d| d.as_str()).unwrap_or("");
+        let desc = tmpl
+            .get("description")
+            .and_then(|d| d.as_str())
+            .unwrap_or("");
         println!("{:<20} {:<12} {:<40}", name, version, desc);
     }
 }
@@ -876,18 +947,32 @@ fn print_update_status(v: &serde_json::Value) {
         return;
     }
 
-    println!("{:<12} {:<20} {:<12} {:<12} {:<8}",
-        "TYPE", "NAME", "CURRENT", "LATEST", "MAJOR");
+    println!(
+        "{:<12} {:<20} {:<12} {:<12} {:<8}",
+        "TYPE", "NAME", "CURRENT", "LATEST", "MAJOR"
+    );
     println!("{}", "-".repeat(64));
 
     for u in updates {
         let kind = u.get("kind").and_then(|k| k.as_str()).unwrap_or("?");
         let name = u.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-        let current = u.get("current_version").and_then(|c| c.as_str()).unwrap_or("?");
-        let latest = u.get("latest_version").and_then(|l| l.as_str()).unwrap_or("?");
+        let current = u
+            .get("current_version")
+            .and_then(|c| c.as_str())
+            .unwrap_or("?");
+        let latest = u
+            .get("latest_version")
+            .and_then(|l| l.as_str())
+            .unwrap_or("?");
         let is_major = u.get("is_major").and_then(|m| m.as_bool()).unwrap_or(false);
-        println!("{:<12} {:<20} {:<12} {:<12} {:<8}",
-            kind, name, current, latest, if is_major { "YES" } else { "no" });
+        println!(
+            "{:<12} {:<20} {:<12} {:<12} {:<8}",
+            kind,
+            name,
+            current,
+            latest,
+            if is_major { "YES" } else { "no" }
+        );
     }
 }
 
@@ -915,8 +1000,10 @@ fn print_audit_entries(v: &serde_json::Value) {
         println!();
     }
 
-    println!("{:<6} {:<20} {:<20} {:<20}",
-        "ID", "ACTION", "TARGET", "TIMESTAMP");
+    println!(
+        "{:<6} {:<20} {:<20} {:<20}",
+        "ID", "ACTION", "TARGET", "TIMESTAMP"
+    );
     println!("{}", "-".repeat(66));
 
     for entry in entries {
@@ -939,7 +1026,8 @@ fn parse_ttl(ttl: &str) -> Result<i64> {
     }
 
     let (num_str, unit) = ttl.split_at(ttl.len() - 1);
-    let num: i64 = num_str.parse()
+    let num: i64 = num_str
+        .parse()
         .with_context(|| format!("Invalid TTL number: '{}'", num_str))?;
 
     match unit {

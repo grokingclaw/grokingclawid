@@ -85,12 +85,7 @@ pub fn open_db_at(path: &std::path::Path) -> Result<Connection> {
 
 /// Build the canonical payload for signing a revocation.
 fn revocation_payload(agent_id: &Uuid, reason: &str, revoked_at: &DateTime<Utc>) -> String {
-    format!(
-        "REVOKE:{}:{}:{}",
-        agent_id,
-        reason,
-        revoked_at.to_rfc3339()
-    )
+    format!("REVOKE:{}:{}:{}", agent_id, reason, revoked_at.to_rfc3339())
 }
 
 /// Revoke an agent card. Records the revocation in the database.
@@ -232,7 +227,15 @@ mod tests {
 
         assert!(!is_revoked(&conn, &agent_id).unwrap());
 
-        let entry = revoke(&conn, &agent_id, "test-agent", "key compromised", "self", &sk).unwrap();
+        let entry = revoke(
+            &conn,
+            &agent_id,
+            "test-agent",
+            "key compromised",
+            "self",
+            &sk,
+        )
+        .unwrap();
         assert_eq!(entry.agent_id, agent_id);
         assert_eq!(entry.reason, "key compromised");
 
