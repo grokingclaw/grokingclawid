@@ -480,6 +480,7 @@ impl IotaClient {
     /// 3. Creates ML-DSA-65 attestation (for PQ audit trail)
     /// 4. Executes on-chain
     /// 5. Returns digest + PQ attestation
+    #[allow(clippy::too_many_arguments)]
     pub async fn transfer_iota_pq(
         &self,
         ed_signing_key: &ed25519_dalek::SigningKey,

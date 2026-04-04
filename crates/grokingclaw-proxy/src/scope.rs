@@ -62,7 +62,7 @@ impl ScopeConfig {
         while self
             .request_timestamps
             .front()
-            .map_or(false, |t| now.duration_since(*t) >= window)
+            .is_some_and(|t| now.duration_since(*t) >= window)
         {
             self.request_timestamps.pop_front();
         }

@@ -39,6 +39,7 @@ pub fn parse_ttl(ttl: &str) -> Result<Duration> {
 }
 
 /// Execute the `issue` command.
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     name: &str,
     owner: &str,

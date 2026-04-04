@@ -150,7 +150,7 @@ impl IotaWsClient {
 
         let msg_text = serde_json::to_string(&subscribe_msg)?;
         ws_stream
-            .send(Message::Text(msg_text.into()))
+            .send(Message::Text(msg_text))
             .await
             .context("Failed to send subscription request")?;
 
@@ -217,7 +217,7 @@ impl IotaWsClient {
             params: vec![serde_json::json!({"Sender": address})],
         };
         ws_stream
-            .send(Message::Text(serde_json::to_string(&sender_sub)?.into()))
+            .send(Message::Text(serde_json::to_string(&sender_sub)?))
             .await?;
 
         // Read confirmation
@@ -231,7 +231,7 @@ impl IotaWsClient {
             params: vec![serde_json::json!({"Recipient": address})],
         };
         ws_stream
-            .send(Message::Text(serde_json::to_string(&recipient_sub)?.into()))
+            .send(Message::Text(serde_json::to_string(&recipient_sub)?))
             .await?;
 
         // Read confirmation

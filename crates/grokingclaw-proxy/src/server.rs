@@ -18,7 +18,7 @@ use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::{TcpListener, TcpStream};
@@ -55,12 +55,12 @@ impl ProxyServer {
     pub fn new(
         scope: ScopeConfig,
         signer: Option<RequestSigner>,
-        audit_db_path: &PathBuf,
+        audit_db_path: &Path,
         agent_id: Uuid,
         signing_key: Arc<SigningKey>,
         port: u16,
     ) -> Result<Self> {
-        let audit = ProxyAuditLogger::new(audit_db_path.as_path(), agent_id, signing_key)?;
+        let audit = ProxyAuditLogger::new(audit_db_path, agent_id, signing_key)?;
         let bind_addr = SocketAddr::from(([127, 0, 0, 1], port));
 
         Ok(Self {
