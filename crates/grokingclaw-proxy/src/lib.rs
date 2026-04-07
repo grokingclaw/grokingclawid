@@ -8,6 +8,7 @@
 //! without changing a single line of their code.
 
 pub mod audit;
+pub mod oauth;
 pub mod scope;
 pub mod server;
 pub mod signer;

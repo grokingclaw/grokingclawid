@@ -621,6 +621,104 @@ async fn dispatch(state: &DaemonState, request: JsonRpcRequest) -> JsonRpcRespon
             )
         }
 
+        // ─── OAuth 2.0 Bridge ──────────────────────────────────────
+        "oauth.register" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_register(agent_name, &request.params).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.register failed: {:#}", e)),
+            }
+        }
+
+        "oauth.authorize" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_authorize(agent_name, registration_id).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.authorize failed: {:#}", e)),
+            }
+        }
+
+        "oauth.callback" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str()).unwrap_or("");
+            let code = request.params.get("code").and_then(|v| v.as_str()).unwrap_or("");
+            let code_verifier = request.params.get("code_verifier").and_then(|v| v.as_str()).unwrap_or("");
+            let redirect_uri = request.params.get("redirect_uri").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_callback(agent_name, registration_id, code, code_verifier, redirect_uri).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.callback failed: {:#}", e)),
+            }
+        }
+
+        "oauth.refresh" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_refresh(agent_name, registration_id).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.refresh failed: {:#}", e)),
+            }
+        }
+
+        "oauth.revoke" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_revoke(agent_name, registration_id).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.revoke failed: {:#}", e)),
+            }
+        }
+
+        "oauth.list" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_list(agent_name).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.list failed: {:#}", e)),
+            }
+        }
+
+        "oauth.status" => {
+            if !state.config.oauth.enabled {
+                return JsonRpcResponse::error(id, -32000, "OAuth bridge is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str());
+            match state.oauth_status(agent_name, registration_id).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.status failed: {:#}", e)),
+            }
+        }
+
+        "oauth.exchange" => {
+            if !state.config.oauth.enabled || !state.config.oauth.allow_token_exchange {
+                return JsonRpcResponse::error(id, -32000, "OAuth token exchange is disabled".into());
+            }
+            let agent_name = request.params.get("agent").and_then(|v| v.as_str()).unwrap_or("");
+            let registration_id = request.params.get("registration_id").and_then(|v| v.as_str()).unwrap_or("");
+            match state.oauth_exchange(agent_name, registration_id).await {
+                Ok(result) => JsonRpcResponse::success(id, result),
+                Err(e) => JsonRpcResponse::error(id, -32000, format!("oauth.exchange failed: {:#}", e)),
+            }
+        }
+
         // ─── Unknown ───────────────────────────────────────────────
         _ => JsonRpcResponse::error(id, -32601, format!("Method not found: {}", request.method)),
     }

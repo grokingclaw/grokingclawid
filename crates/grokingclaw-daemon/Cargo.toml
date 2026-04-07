@@ -60,6 +60,12 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 # System info
 hostname = "0.4"
 
+# OAuth token encryption
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+getrandom = "0.2"
+urlencoding = "2.1"
+
 # Utilities
 anyhow = "1.0"
 dirs = "5.0"

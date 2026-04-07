@@ -10,6 +10,8 @@ mod config;
 mod daemon;
 mod ipc;
 mod mesh;
+mod oauth_flow;
+mod oauth_store;
 mod supervisor;
 mod templates;
 mod updates;

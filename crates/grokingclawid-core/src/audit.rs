@@ -142,30 +142,40 @@ pub fn query_entries(
     agent_id: Option<&str>,
     last_duration: Option<Duration>,
 ) -> Result<Vec<AuditEntry>> {
-    let mut sql = String::from("SELECT id, agent_id, action, target, timestamp, prev_hash, entry_hash, signature FROM audit_log WHERE 1=1");
-    let mut bind_values: Vec<String> = Vec::new();
+    // Build query with typed parameters to avoid string-based binding issues.
+    // We use Box<dyn ToSql> to hold heterogeneous param types (String and i64).
+    let mut conditions: Vec<String> = Vec::new();
+    let mut bind_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(aid) = agent_id {
-        sql.push_str(" AND agent_id = ?");
-        bind_values.push(aid.to_string());
+        conditions.push(format!("agent_id = ?{}", bind_values.len() + 1));
+        bind_values.push(Box::new(aid.to_string()));
     }
 
     if let Some(dur) = last_duration {
-        let cutoff = Utc::now().timestamp() - dur.num_seconds();
-        sql.push_str(" AND timestamp >= ?");
-        bind_values.push(cutoff.to_string());
+        let cutoff: i64 = Utc::now().timestamp() - dur.num_seconds();
+        conditions.push(format!("timestamp >= ?{}", bind_values.len() + 1));
+        bind_values.push(Box::new(cutoff));
     }
 
-    sql.push_str(" ORDER BY id ASC");
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
+    };
+
+    let sql = format!(
+        "SELECT id, agent_id, action, target, timestamp, prev_hash, entry_hash, signature FROM audit_log{} ORDER BY id ASC",
+        where_clause
+    );
 
     let mut stmt = conn
         .prepare(&sql)
         .context("Failed to prepare audit query")?;
 
-    // Build dynamic parameter references
     let params: Vec<&dyn rusqlite::types::ToSql> = bind_values
         .iter()
-        .map(|v| v as &dyn rusqlite::types::ToSql)
+        .map(|v| v.as_ref() as &dyn rusqlite::types::ToSql)
         .collect();
 
     let entries = stmt

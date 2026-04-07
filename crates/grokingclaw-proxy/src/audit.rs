@@ -22,6 +22,8 @@ pub struct ProxyAuditEntry {
     pub response_size_bytes: u64,
     pub duration_ms: u64,
     pub signed: bool,
+    /// Whether an OAuth Bearer token was injected into this request.
+    pub oauth_injected: bool,
 }
 
 /// Thread-safe audit logger wrapping a rusqlite Connection + signing key.
@@ -45,8 +47,9 @@ impl ProxyAuditLogger {
 
     /// Log a proxied request.
     pub async fn log_request(&self, entry: &ProxyAuditEntry) -> Result<()> {
+        let oauth_tag = if entry.oauth_injected { " oauth=injected" } else { "" };
         let action = format!(
-            "PROXY {} {} [{}] status={} req:{}B resp:{}B {}ms",
+            "PROXY {} {} [{}] status={} req:{}B resp:{}B {}ms{}",
             entry.method,
             entry.url,
             entry.scope_decision,
@@ -57,6 +60,7 @@ impl ProxyAuditLogger {
             entry.request_size_bytes,
             entry.response_size_bytes,
             entry.duration_ms,
+            oauth_tag,
         );
 
         let target = entry.url.clone();

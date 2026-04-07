@@ -11,23 +11,47 @@ use ed25519_dalek::SigningKey;
 use std::path::Path;
 
 /// Request signer that holds the agent's private key.
+///
+/// Supports Ed25519-only or hybrid (Ed25519 + ML-DSA-65) signing.
+/// When a PQ secret key is present, both a classical `Signature` header
+/// and a post-quantum `Signature-PQ` header are emitted.
 pub struct RequestSigner {
     signing_key: SigningKey,
+    /// Optional ML-DSA-65 secret key bytes for hybrid signing.
+    pq_secret_key: Option<Vec<u8>>,
     agent_id: String,
     key_id: String,
 }
 
 impl RequestSigner {
     /// Load the agent's signing key from PEM file.
+    ///
+    /// Attempts hybrid key decoding first (Ed25519 + ML-DSA-65).
+    /// Falls back to Ed25519-only if the PEM contains only a classical key.
     pub fn from_pem(pem_path: &Path, agent_id: &str) -> Result<Self> {
         let pem = std::fs::read_to_string(pem_path)
             .with_context(|| format!("Failed to read key: {}", pem_path.display()))?;
+
+        let key_id = format!("clawid-{}", &agent_id[..8.min(agent_id.len())]);
+
+        // Try hybrid key first
+        if let Ok((ed_key, pq_secret)) = grokingclawid_core::crypto::decode_hybrid_private_key_pem(&pem) {
+            return Ok(Self {
+                signing_key: ed_key,
+                pq_secret_key: Some(pq_secret),
+                agent_id: agent_id.to_string(),
+                key_id,
+            });
+        }
+
+        // Try ML-DSA-65 only (unusual for proxy, but handle gracefully)
+        // Fall back to Ed25519-only
         let signing_key = grokingclawid_core::crypto::decode_private_key_pem(&pem)
             .context("Failed to decode agent private key")?;
-        let key_id = format!("clawid-{}", &agent_id[..8.min(agent_id.len())]);
 
         Ok(Self {
             signing_key,
+            pq_secret_key: None,
             agent_id: agent_id.to_string(),
             key_id,
         })
@@ -81,6 +105,18 @@ impl RequestSigner {
             ("Signature".to_string(), format!("sig1=:{sig_b64}:")),
             ("X-ClawID-Agent".to_string(), self.agent_id.clone()),
         ];
+
+        // Add ML-DSA-65 post-quantum signature if hybrid key is available
+        if let Some(ref pq_key) = self.pq_secret_key {
+            match grokingclawid_core::crypto::mldsa_sign(pq_key, sig_base.as_bytes()) {
+                Ok(pq_sig_b64) => {
+                    headers.push(("Signature-PQ".to_string(), format!("sig1=:{pq_sig_b64}:")));
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to generate PQ signature, sending Ed25519 only");
+                }
+            }
+        }
 
         // Add date if not already present
         let has_date = existing_headers

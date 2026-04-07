@@ -5,6 +5,7 @@ pub mod export;
 pub mod guard;
 pub mod issue;
 pub mod license;
+pub mod oauth;
 pub mod revoke;
 pub mod rotate;
 pub mod sign;

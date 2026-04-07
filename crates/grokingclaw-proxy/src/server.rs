@@ -26,6 +26,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::audit::{ProxyAuditEntry, ProxyAuditLogger};
+use crate::oauth::{extract_domain, OAuthTokenCache};
 use crate::scope::{ScopeConfig, ScopeDecision};
 use crate::signer::RequestSigner;
 
@@ -33,6 +34,7 @@ use crate::signer::RequestSigner;
 struct ProxyState {
     scope: Mutex<ScopeConfig>,
     signer: Option<RequestSigner>,
+    oauth: Option<OAuthTokenCache>,
     audit: ProxyAuditLogger,
     agent_id: String,
 }
@@ -55,6 +57,7 @@ impl ProxyServer {
     pub fn new(
         scope: ScopeConfig,
         signer: Option<RequestSigner>,
+        oauth: Option<OAuthTokenCache>,
         audit_db_path: &Path,
         agent_id: Uuid,
         signing_key: Arc<SigningKey>,
@@ -67,6 +70,7 @@ impl ProxyServer {
             state: Arc::new(ProxyState {
                 scope: Mutex::new(scope),
                 signer,
+                oauth,
                 audit,
                 agent_id: agent_id.to_string(),
             }),
@@ -176,6 +180,7 @@ async fn handle_connect(
                     response_size_bytes: 0,
                     duration_ms: start.elapsed().as_millis() as u64,
                     signed: false,
+                    oauth_injected: false,
                 })
                 .await;
 
@@ -237,7 +242,30 @@ async fn handle_forward(
             // Build the outbound request
             let (mut parts, body) = req.into_parts();
 
-            // Collect existing headers for signer
+            // Inject OAuth Bearer token if domain binding exists
+            let oauth_injected = if let Some(ref oauth) = state.oauth {
+                if let Some(domain) = extract_domain(&uri) {
+                    if let Some(token) = oauth.get_token(&domain).await {
+                        if let Ok(val) =
+                            hyper::header::HeaderValue::from_str(&format!("Bearer {}", token.access_token))
+                        {
+                            parts.headers.insert(hyper::header::AUTHORIZATION, val);
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            // Collect existing headers for signer (AFTER OAuth injection,
+            // so the RFC 9421 signature covers the Authorization header)
             let existing_headers: Vec<(String, String)> = parts
                 .headers
                 .iter()
@@ -304,6 +332,7 @@ async fn handle_forward(
                         response_size_bytes: 0,
                         duration_ms: start.elapsed().as_millis() as u64,
                         signed,
+                        oauth_injected,
                     })
                     .await;
                 return Ok(error_response(
@@ -330,6 +359,7 @@ async fn handle_forward(
                             response_size_bytes: 0,
                             duration_ms: start.elapsed().as_millis() as u64,
                             signed,
+                            oauth_injected,
                         })
                         .await;
                     return Ok(error_response("Failed to connect to upstream"));
@@ -389,6 +419,7 @@ async fn handle_forward(
                     response_size_bytes: resp_size,
                     duration_ms: start.elapsed().as_millis() as u64,
                     signed,
+                    oauth_injected,
                 })
                 .await;
 
@@ -485,6 +516,7 @@ mod tests {
         let server = ProxyServer::new(
             ScopeConfig::permissive(),
             None,
+            None,
             &db_path,
             agent_id,
             Arc::new(signing_key),
@@ -508,7 +540,7 @@ mod tests {
 
         let scope = ScopeConfig::new(vec!["allowed.com".to_string()], 0);
         let server =
-            ProxyServer::new(scope, None, &db_path, agent_id, Arc::new(signing_key), 0).unwrap();
+            ProxyServer::new(scope, None, None, &db_path, agent_id, Arc::new(signing_key), 0).unwrap();
 
         let (_port, handle) = server.start().await.unwrap();
 

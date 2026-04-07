@@ -179,6 +179,225 @@ impl DaemonState {
 
         Ok(result)
     }
+
+    // ─── OAuth 2.0 Bridge Methods ──────────────────────────────────────
+
+    /// Helper: load an agent's OAuth store (encrypted).
+    fn load_oauth_store(&self, agent_name: &str) -> Result<(crate::oauth_store::OAuthStore, std::path::PathBuf, ed25519_dalek::SigningKey)> {
+        let agent_dir = self.root_dir.join("agents").join(agent_name);
+        let key_path = agent_dir.join("identity").join("agent.pem");
+        if !key_path.exists() {
+            anyhow::bail!("Agent '{}' identity not found", agent_name);
+        }
+        let pem = std::fs::read_to_string(&key_path)
+            .with_context(|| format!("Failed to read key: {}", key_path.display()))?;
+        let signing_key = grokingclawid_core::crypto::decode_private_key_pem(&pem)?;
+        let store_path = crate::oauth_store::OAuthStore::store_path(&agent_dir);
+        let store = crate::oauth_store::OAuthStore::load(&store_path, &signing_key)?;
+        Ok((store, store_path, signing_key))
+    }
+
+    /// Helper: save an agent's OAuth store.
+    fn save_oauth_store(&self, store: &crate::oauth_store::OAuthStore, store_path: &std::path::Path, signing_key: &ed25519_dalek::SigningKey) -> Result<()> {
+        store.save(store_path, signing_key)
+    }
+
+    /// Register an OAuth provider for an agent.
+    pub async fn oauth_register(&self, agent_name: &str, params: &serde_json::Value) -> Result<serde_json::Value> {
+        let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+
+        let reg = crate::oauth_store::OAuthRegistration {
+            id: params.get("registration_id").and_then(|v| v.as_str())
+                .unwrap_or(&uuid::Uuid::new_v4().to_string()).to_string(),
+            provider: params.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            client_id: params.get("client_id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            client_secret: params.get("client_secret").and_then(|v| v.as_str()).map(String::from),
+            authorization_url: params.get("authorization_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            token_url: params.get("token_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            revocation_url: params.get("revocation_url").and_then(|v| v.as_str()).map(String::from),
+            device_authorization_url: params.get("device_authorization_url").and_then(|v| v.as_str()).map(String::from),
+            scopes: params.get("scopes").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            domain_bindings: params.get("domain_bindings").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            grant_type: params.get("grant_type").and_then(|v| v.as_str()).unwrap_or("authorization_code").to_string(),
+            created_at: chrono::Utc::now(),
+            parent_registration_id: params.get("parent_registration_id").and_then(|v| v.as_str()).map(String::from),
+            max_scopes: params.get("max_scopes").and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()),
+        };
+
+        let reg_id = reg.id.clone();
+        store.register_provider(reg)?;
+        self.save_oauth_store(&store, &store_path, &signing_key)?;
+
+        Ok(serde_json::json!({ "ok": true, "registration_id": reg_id }))
+    }
+
+    /// Start an OAuth authorization flow for an agent.
+    pub async fn oauth_authorize(&self, agent_name: &str, registration_id: &str) -> Result<serde_json::Value> {
+        let (store, _, _) = self.load_oauth_store(agent_name)?;
+        let reg = store.get_registration(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", registration_id))?;
+
+        match reg.grant_type.as_str() {
+            "device_code" => {
+                let pending = crate::oauth_flow::start_device_auth(reg).await?;
+                Ok(serde_json::to_value(pending)?)
+            }
+            "client_credentials" => {
+                let tokens = crate::oauth_flow::client_credentials(reg).await?;
+                let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+                store.store_tokens(tokens)?;
+                self.save_oauth_store(&store, &store_path, &signing_key)?;
+                Ok(serde_json::json!({ "ok": true, "status": "tokens_acquired" }))
+            }
+            "authorization_code" => {
+                let redirect_uri = format!("http://localhost:{}/oauth/callback", self.config.oauth.callback_port);
+                let start = crate::oauth_flow::start_auth_code_flow(reg, &redirect_uri)?;
+                Ok(serde_json::to_value(start)?)
+            }
+            other => anyhow::bail!("Unsupported grant type: {}", other),
+        }
+    }
+
+    /// Complete an authorization code exchange.
+    pub async fn oauth_callback(&self, agent_name: &str, registration_id: &str, code: &str, code_verifier: &str, redirect_uri: &str) -> Result<serde_json::Value> {
+        let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+        let reg = store.get_registration(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", registration_id))?
+            .clone();
+
+        let tokens = crate::oauth_flow::exchange_auth_code(&reg, code, redirect_uri, code_verifier).await?;
+        store.store_tokens(tokens)?;
+        self.save_oauth_store(&store, &store_path, &signing_key)?;
+
+        Ok(serde_json::json!({ "ok": true, "status": "tokens_stored" }))
+    }
+
+    /// Refresh an OAuth token for an agent.
+    pub async fn oauth_refresh(&self, agent_name: &str, registration_id: &str) -> Result<serde_json::Value> {
+        let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+        let reg = store.get_registration(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", registration_id))?
+            .clone();
+        let existing = store.get_tokens(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("No tokens found for registration '{}'", registration_id))?;
+        let refresh_token_value = existing.refresh_token.clone()
+            .ok_or_else(|| anyhow::anyhow!("No refresh token available for '{}'", registration_id))?;
+
+        let new_tokens = crate::oauth_flow::refresh_token(&reg, &refresh_token_value).await?;
+
+        // Return the cached token format for the proxy
+        let cached = grokingclaw_proxy::oauth::CachedOAuthToken {
+            access_token: new_tokens.access_token.clone(),
+            expires_at: new_tokens.expires_at.timestamp(),
+            scopes: new_tokens.granted_scopes.clone(),
+            provider: reg.provider.clone(),
+            registration_id: registration_id.to_string(),
+        };
+
+        store.store_tokens(new_tokens)?;
+        self.save_oauth_store(&store, &store_path, &signing_key)?;
+
+        Ok(serde_json::to_value(cached)?)
+    }
+
+    /// Revoke OAuth tokens and remove registration.
+    pub async fn oauth_revoke(&self, agent_name: &str, registration_id: &str) -> Result<serde_json::Value> {
+        let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+        let reg = store.get_registration(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", registration_id))?
+            .clone();
+
+        // Revoke at provider if endpoint available
+        if let Some(tokens) = store.get_tokens(registration_id) {
+            // Try revoking refresh token first, then access token
+            if let Some(ref rt) = tokens.refresh_token {
+                let _ = crate::oauth_flow::revoke_token(&reg, rt, "refresh_token").await;
+            }
+            let _ = crate::oauth_flow::revoke_token(&reg, &tokens.access_token, "access_token").await;
+        }
+
+        // Cascade remove child delegations
+        store.cascade_remove(registration_id);
+        // Remove the registration itself
+        store.remove_registration(registration_id)?;
+        self.save_oauth_store(&store, &store_path, &signing_key)?;
+
+        Ok(serde_json::json!({ "ok": true, "revoked": registration_id }))
+    }
+
+    /// List all OAuth registrations for an agent.
+    pub async fn oauth_list(&self, agent_name: &str) -> Result<serde_json::Value> {
+        let (store, _, _) = self.load_oauth_store(agent_name)?;
+        let regs: Vec<serde_json::Value> = store.registrations.iter().map(|r| {
+            let has_tokens = store.get_tokens(&r.id).is_some();
+            let token_status = store.get_tokens(&r.id).map(|t| {
+                if t.expires_at < chrono::Utc::now() { "expired" } else { "valid" }
+            }).unwrap_or("missing");
+            serde_json::json!({
+                "id": r.id,
+                "provider": r.provider,
+                "grant_type": r.grant_type,
+                "scopes": r.scopes,
+                "domain_bindings": r.domain_bindings,
+                "has_tokens": has_tokens,
+                "token_status": token_status,
+            })
+        }).collect();
+
+        Ok(serde_json::json!({ "registrations": regs }))
+    }
+
+    /// Get OAuth token status for an agent.
+    pub async fn oauth_status(&self, agent_name: &str, registration_id: Option<&str>) -> Result<serde_json::Value> {
+        let (store, _, _) = self.load_oauth_store(agent_name)?;
+
+        if let Some(reg_id) = registration_id {
+            let reg = store.get_registration(reg_id)
+                .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", reg_id))?;
+            let tokens = store.get_tokens(reg_id);
+            let status = match tokens {
+                Some(t) if t.expires_at > chrono::Utc::now() => "valid",
+                Some(_) => "expired",
+                None => "missing",
+            };
+            Ok(serde_json::json!({
+                "registration_id": reg_id,
+                "provider": reg.provider,
+                "status": status,
+                "expires_at": tokens.map(|t| t.expires_at.to_rfc3339()),
+            }))
+        } else {
+            self.oauth_list(agent_name).await
+        }
+    }
+
+    /// RFC 8693 token exchange: ClawID identity → OAuth token.
+    pub async fn oauth_exchange(&self, agent_name: &str, registration_id: &str) -> Result<serde_json::Value> {
+        let (mut store, store_path, signing_key) = self.load_oauth_store(agent_name)?;
+        let reg = store.get_registration(registration_id)
+            .ok_or_else(|| anyhow::anyhow!("Registration '{}' not found", registration_id))?
+            .clone();
+
+        // Load agent card for the assertion
+        let agent_dir = self.root_dir.join("agents").join(agent_name);
+        let card_path = agent_dir.join("identity").join("agent-card.json");
+        let card_json = std::fs::read_to_string(&card_path)
+            .context("Failed to read agent card")?;
+
+        // Create signed assertion (sign the card JSON with agent's key)
+        let signed_assertion = grokingclawid_core::crypto::sign(&signing_key, card_json.as_bytes());
+
+        let tokens = crate::oauth_flow::clawid_token_exchange(&reg, &card_json, &signed_assertion, None).await?;
+        store.store_tokens(tokens)?;
+        self.save_oauth_store(&store, &store_path, &signing_key)?;
+
+        Ok(serde_json::json!({ "ok": true, "status": "token_exchanged" }))
+    }
 }
 
 /// Verify the audit hash chain integrity.

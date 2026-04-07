@@ -197,6 +197,79 @@ const TOOLS = [
       required: ["card", "key", "to", "amount"],
     },
   },
+  // ─── OAuth 2.0 Bridge Tools ─────────────────────────────────────
+  {
+    name: "clawid_oauth_register",
+    description:
+      "Register an OAuth 2.0 provider for an agent. Configures client credentials, scopes, and domain bindings so the proxy can auto-inject Bearer tokens.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name" },
+        provider: { type: "string", description: "Provider name (github, google, openai, etc.)" },
+        client_id: { type: "string", description: "OAuth client ID" },
+        client_secret: { type: "string", description: "OAuth client secret (omit for public clients)" },
+        authorization_url: { type: "string", description: "Authorization endpoint URL" },
+        token_url: { type: "string", description: "Token endpoint URL" },
+        scopes: { type: "string", description: "Space-separated scopes to request" },
+        domains: { type: "string", description: "Comma-separated domains for token injection" },
+        grant_type: { type: "string", description: "Grant type: authorization_code, device_code, client_credentials" },
+      },
+      required: ["agent", "provider", "client_id", "token_url", "scopes", "domains"],
+    },
+  },
+  {
+    name: "clawid_oauth_authorize",
+    description:
+      "Start an OAuth authorization flow for an agent. Returns a user code (device flow) or authorization URL (code flow).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name" },
+        registration_id: { type: "string", description: "OAuth registration ID" },
+      },
+      required: ["agent", "registration_id"],
+    },
+  },
+  {
+    name: "clawid_oauth_status",
+    description:
+      "Check OAuth token status for an agent — shows valid/expired/missing for each registration.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name" },
+        registration_id: { type: "string", description: "Optional: specific registration ID" },
+      },
+      required: ["agent"],
+    },
+  },
+  {
+    name: "clawid_oauth_revoke",
+    description:
+      "Revoke OAuth tokens for a registration. Cascades to child delegations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name" },
+        registration_id: { type: "string", description: "OAuth registration ID to revoke" },
+      },
+      required: ["agent", "registration_id"],
+    },
+  },
+  {
+    name: "clawid_oauth_exchange",
+    description:
+      "Exchange a ClawID agent identity for an OAuth token via RFC 8693 token exchange.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: { type: "string", description: "Agent name" },
+        registration_id: { type: "string", description: "OAuth registration ID" },
+      },
+      required: ["agent", "registration_id"],
+    },
+  },
 ];
 
 // ─── CLI Execution ─────────────────────────────────────────────────
@@ -265,6 +338,25 @@ function buildArgs(toolName, params) {
       return ["wallet", "balance", "--card", params.card];
     case "clawid_wallet_send":
       return ["wallet", "send", "--card", params.card, "--key", params.key, "--to", params.to, "--amount", String(params.amount)];
+    // ─── OAuth 2.0 Bridge ────────────────────────────────────────
+    case "clawid_oauth_register": {
+      const args = ["oauth", "register", "--agent", params.agent, "--provider", params.provider, "--client-id", params.client_id, "--token-url", params.token_url, "--scopes", params.scopes, "--domains", params.domains];
+      if (params.client_secret) args.push("--client-secret", params.client_secret);
+      if (params.authorization_url) args.push("--authorization-url", params.authorization_url);
+      if (params.grant_type) args.push("--grant-type", params.grant_type);
+      return args;
+    }
+    case "clawid_oauth_authorize":
+      return ["oauth", "authorize", "--agent", params.agent, "--registration", params.registration_id];
+    case "clawid_oauth_status": {
+      const args = ["oauth", "status", "--agent", params.agent];
+      if (params.registration_id) args.push("--registration", params.registration_id);
+      return args;
+    }
+    case "clawid_oauth_revoke":
+      return ["oauth", "revoke", "--agent", params.agent, "--registration", params.registration_id];
+    case "clawid_oauth_exchange":
+      return ["oauth", "exchange", "--agent", params.agent, "--registration", params.registration_id];
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }

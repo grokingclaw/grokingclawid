@@ -310,9 +310,48 @@ impl Supervisor {
             let signer =
                 RequestSigner::from_pem(&key_path, &agent.config.agent_id.to_string()).ok();
 
+            // Load OAuth token cache for this agent (if any registrations exist)
+            let oauth_cache = {
+                let agent_dir = self.agents_dir.join(&agent.config.name);
+                let store_path = crate::oauth_store::OAuthStore::store_path(&agent_dir);
+                if store_path.exists() {
+                    match crate::oauth_store::OAuthStore::load(&store_path, &signing_key) {
+                        Ok(store) => {
+                            let bindings = store.get_domain_bindings();
+                            let tokens = store.get_cached_tokens();
+                            if !bindings.is_empty() {
+                                let socket_path = crate::config::daemon_root()
+                                    .map(|r| r.join("daemon.sock").to_string_lossy().to_string())
+                                    .unwrap_or_default();
+                                Some(grokingclaw_proxy::oauth::OAuthTokenCache::new(
+                                    agent.config.agent_id.to_string(),
+                                    socket_path,
+                                    bindings,
+                                    tokens,
+                                    60, // refresh buffer seconds
+                                ))
+                            } else {
+                                None
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                agent = %agent.config.name,
+                                error = %e,
+                                "Failed to load OAuth store; starting without OAuth"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            };
+
             let proxy = ProxyServer::new(
                 scope,
                 signer,
+                oauth_cache,
                 &audit_db,
                 agent.config.agent_id,
                 Arc::clone(&signing_key),

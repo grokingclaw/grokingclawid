@@ -296,6 +296,12 @@ enum Commands {
         server: Vec<String>,
     },
 
+    /// OAuth 2.0 bridge — register providers, manage tokens, exchange identity
+    Oauth {
+        #[command(subcommand)]
+        action: OAuthAction,
+    },
+
     /// IOTA testnet wallet operations
     Wallet {
         #[command(subcommand)]
@@ -319,6 +325,77 @@ enum LicenseAction {
     },
     /// Deactivate current license (revert to Free tier)
     Deactivate,
+}
+
+/// OAuth sub-subcommands.
+#[derive(Subcommand)]
+enum OAuthAction {
+    /// Register an OAuth provider for an agent
+    Register {
+        /// Agent name
+        #[arg(long)]
+        agent: String,
+        /// Provider name (github, google, openai, etc.)
+        #[arg(long)]
+        provider: String,
+        /// OAuth client ID
+        #[arg(long)]
+        client_id: String,
+        /// OAuth client secret (omit for public clients)
+        #[arg(long)]
+        client_secret: Option<String>,
+        /// Authorization endpoint URL
+        #[arg(long)]
+        authorization_url: Option<String>,
+        /// Token endpoint URL
+        #[arg(long)]
+        token_url: String,
+        /// Space-separated scopes
+        #[arg(long)]
+        scopes: String,
+        /// Comma-separated domains for token injection
+        #[arg(long)]
+        domains: String,
+        /// Grant type: authorization_code, device_code, client_credentials
+        #[arg(long, default_value = "authorization_code")]
+        grant_type: String,
+    },
+    /// Start an OAuth authorization flow
+    Authorize {
+        /// Agent name
+        #[arg(long)]
+        agent: String,
+        /// Registration ID
+        #[arg(long)]
+        registration: String,
+    },
+    /// Check OAuth token status
+    Status {
+        /// Agent name
+        #[arg(long)]
+        agent: String,
+        /// Optional: specific registration ID
+        #[arg(long)]
+        registration: Option<String>,
+    },
+    /// Revoke OAuth tokens
+    Revoke {
+        /// Agent name
+        #[arg(long)]
+        agent: String,
+        /// Registration ID to revoke
+        #[arg(long)]
+        registration: String,
+    },
+    /// Exchange ClawID identity for OAuth token (RFC 8693)
+    Exchange {
+        /// Agent name
+        #[arg(long)]
+        agent: String,
+        /// Registration ID
+        #[arg(long)]
+        registration: String,
+    },
 }
 
 /// Wallet sub-subcommands.
@@ -542,6 +619,28 @@ fn main() {
             None => commands::license::execute_show(),
             Some(LicenseAction::Activate { key }) => commands::license::execute_activate(&key),
             Some(LicenseAction::Deactivate) => commands::license::execute_deactivate(),
+        },
+
+        Commands::Oauth { action } => match action {
+            OAuthAction::Register {
+                agent, provider, client_id, client_secret, authorization_url,
+                token_url, scopes, domains, grant_type,
+            } => commands::oauth::execute_register(
+                &agent, &provider, &client_id, client_secret.as_deref(),
+                authorization_url.as_deref(), &token_url, &scopes, &domains, &grant_type,
+            ),
+            OAuthAction::Authorize { agent, registration } => {
+                commands::oauth::execute_authorize(&agent, &registration)
+            }
+            OAuthAction::Status { agent, registration } => {
+                commands::oauth::execute_status(&agent, registration.as_deref())
+            }
+            OAuthAction::Revoke { agent, registration } => {
+                commands::oauth::execute_revoke(&agent, &registration)
+            }
+            OAuthAction::Exchange { agent, registration } => {
+                commands::oauth::execute_exchange(&agent, &registration)
+            }
         },
 
         Commands::Wallet { action } => match action {

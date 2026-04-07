@@ -21,6 +21,10 @@ use crate::supervisor::{AgentConfig, AgentInfo, ModelConfig, ResourceConfig, Res
 use crate::templates::TemplateRegistry;
 use grokingclawid_core::license::{self, LicenseFeature};
 
+fn default_crypto_scheme() -> String {
+    "hybrid".to_string()
+}
+
 // ─── Birth Protocol Message Types ──────────────────────────────────────
 
 /// Birth request sent from Daemon to Naja coordination server.
@@ -50,6 +54,12 @@ pub struct BirthRequest {
     pub ttl_seconds: i64,
     /// Agent's Ed25519 public key (base64).
     pub agent_public_key: String,
+    /// Agent's ML-DSA-65 post-quantum public key (base64, optional for Ed25519-only agents).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_pq_public_key: Option<String>,
+    /// Cryptographic scheme: "ed25519", "ml-dsa-65", or "hybrid".
+    #[serde(default = "default_crypto_scheme")]
+    pub crypto_scheme: String,
     /// Timestamp of request.
     pub requested_at: DateTime<Utc>,
     /// Signature over request fields by daemon key.
@@ -140,6 +150,17 @@ pub struct BirthCertificate {
 
 // ─── Birth Parameters ───────────────────────────────────────────────────
 
+/// OAuth delegation to propagate from parent to child agent at birth.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuthDelegation {
+    /// Parent's OAuth registration ID to delegate from.
+    pub parent_registration_id: String,
+    /// Maximum scopes the child may use (MUST be subset of parent's granted scopes).
+    pub max_scopes: Vec<String>,
+    /// Domain bindings for the child (MUST be subset of parent's domain bindings).
+    pub domain_bindings: Vec<String>,
+}
+
 /// Parameters for birthing a new agent (passed from CLI/IPC).
 #[derive(Debug, Clone)]
 pub struct BirthParams {
@@ -150,6 +171,8 @@ pub struct BirthParams {
     pub ttl_seconds: i64,
     pub model: ModelConfig,
     pub resources: ResourceConfig,
+    /// OAuth delegations from a parent agent (Phase 3).
+    pub oauth_delegations: Vec<OAuthDelegation>,
 }
 
 impl BirthParams {
@@ -195,6 +218,11 @@ impl BirthParams {
             .and_then(|v| serde_json::from_value::<ResourceConfig>(v.clone()).ok())
             .unwrap_or_default();
 
+        let oauth_delegations: Vec<OAuthDelegation> = params
+            .get("oauth_delegations")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+
         Ok(Self {
             template,
             name,
@@ -203,6 +231,7 @@ impl BirthParams {
             ttl_seconds,
             model,
             resources,
+            oauth_delegations,
         })
     }
 }
@@ -334,6 +363,8 @@ async fn birth_via_mesh(
         },
         ttl_seconds: params.ttl_seconds,
         agent_public_key: agent_public_key.clone(),
+        agent_pq_public_key: None, // TODO: populate from hybrid key when available
+        crypto_scheme: "hybrid".to_string(),
         requested_at: Utc::now(),
         daemon_signature,
     };
@@ -707,6 +738,8 @@ mod tests {
             },
             ttl_seconds: 86400,
             agent_public_key: "dGVzdC1rZXk=".to_string(),
+            agent_pq_public_key: None,
+            crypto_scheme: "hybrid".to_string(),
             requested_at: Utc::now(),
             daemon_signature: "test-sig".to_string(),
         };

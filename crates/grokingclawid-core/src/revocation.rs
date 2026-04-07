@@ -30,6 +30,9 @@ pub struct RevocationEntry {
     pub revoked_at: DateTime<Utc>,
     /// Ed25519 signature over the revocation payload (proves authority).
     pub signature: String,
+    /// ML-DSA-65 post-quantum signature (optional; present for hybrid cards).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pq_signature: Option<String>,
 }
 
 /// Default revocation DB directory: ~/.grokingclawid/
@@ -50,12 +53,13 @@ pub fn open_db() -> Result<Connection> {
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS revocations (
-            agent_id    TEXT PRIMARY KEY,
-            agent_name  TEXT NOT NULL,
-            reason      TEXT NOT NULL,
-            revoked_by  TEXT NOT NULL,
-            revoked_at  TEXT NOT NULL,
-            signature   TEXT NOT NULL
+            agent_id      TEXT PRIMARY KEY,
+            agent_name    TEXT NOT NULL,
+            reason        TEXT NOT NULL,
+            revoked_by    TEXT NOT NULL,
+            revoked_at    TEXT NOT NULL,
+            signature     TEXT NOT NULL,
+            pq_signature  TEXT
         );",
     )
     .context("Failed to initialize revocations schema")?;
@@ -70,12 +74,13 @@ pub fn open_db_at(path: &std::path::Path) -> Result<Connection> {
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS revocations (
-            agent_id    TEXT PRIMARY KEY,
-            agent_name  TEXT NOT NULL,
-            reason      TEXT NOT NULL,
-            revoked_by  TEXT NOT NULL,
-            revoked_at  TEXT NOT NULL,
-            signature   TEXT NOT NULL
+            agent_id      TEXT PRIMARY KEY,
+            agent_name    TEXT NOT NULL,
+            reason        TEXT NOT NULL,
+            revoked_by    TEXT NOT NULL,
+            revoked_at    TEXT NOT NULL,
+            signature     TEXT NOT NULL,
+            pq_signature  TEXT
         );",
     )
     .context("Failed to initialize revocations schema")?;
@@ -92,6 +97,9 @@ fn revocation_payload(agent_id: &Uuid, reason: &str, revoked_at: &DateTime<Utc>)
 ///
 /// The signing key must belong to the card owner (self-revocation)
 /// or a parent agent (parent revocation).
+///
+/// If `pq_secret_key` is provided, a post-quantum ML-DSA-65 signature
+/// is also recorded, making the revocation PQ-resistant.
 pub fn revoke(
     conn: &Connection,
     agent_id: &Uuid,
@@ -99,6 +107,19 @@ pub fn revoke(
     reason: &str,
     revoked_by: &str,
     signing_key: &ed25519_dalek::SigningKey,
+) -> Result<RevocationEntry> {
+    revoke_hybrid(conn, agent_id, agent_name, reason, revoked_by, signing_key, None)
+}
+
+/// Revoke with optional post-quantum signature.
+pub fn revoke_hybrid(
+    conn: &Connection,
+    agent_id: &Uuid,
+    agent_name: &str,
+    reason: &str,
+    revoked_by: &str,
+    signing_key: &ed25519_dalek::SigningKey,
+    pq_secret_key: Option<&[u8]>,
 ) -> Result<RevocationEntry> {
     // Check if already revoked
     if is_revoked(conn, agent_id)? {
@@ -109,16 +130,24 @@ pub fn revoke(
     let payload = revocation_payload(agent_id, reason, &now);
     let signature = crypto::sign(signing_key, payload.as_bytes());
 
+    // Optional PQ signature
+    let pq_signature = if let Some(pq_key) = pq_secret_key {
+        Some(crypto::mldsa_sign(pq_key, payload.as_bytes())?)
+    } else {
+        None
+    };
+
     conn.execute(
-        "INSERT INTO revocations (agent_id, agent_name, reason, revoked_by, revoked_at, signature)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO revocations (agent_id, agent_name, reason, revoked_by, revoked_at, signature, pq_signature)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         params![
             agent_id.to_string(),
             agent_name,
             reason,
             revoked_by,
             now.to_rfc3339(),
-            signature
+            signature,
+            pq_signature,
         ],
     )
     .context("Failed to insert revocation entry")?;
@@ -130,6 +159,7 @@ pub fn revoke(
         revoked_by: revoked_by.to_string(),
         revoked_at: now,
         signature,
+        pq_signature,
     })
 }
 
@@ -148,7 +178,7 @@ pub fn is_revoked(conn: &Connection, agent_id: &Uuid) -> Result<bool> {
 /// Get the revocation entry for an agent card, if it exists.
 pub fn get_revocation(conn: &Connection, agent_id: &Uuid) -> Result<Option<RevocationEntry>> {
     let result = conn.query_row(
-        "SELECT agent_id, agent_name, reason, revoked_by, revoked_at, signature
+        "SELECT agent_id, agent_name, reason, revoked_by, revoked_at, signature, pq_signature
          FROM revocations WHERE agent_id = ?1",
         params![agent_id.to_string()],
         |row| {
@@ -163,6 +193,7 @@ pub fn get_revocation(conn: &Connection, agent_id: &Uuid) -> Result<Option<Revoc
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now()),
                 signature: row.get(5)?,
+                pq_signature: row.get(6)?,
             })
         },
     );
@@ -178,7 +209,7 @@ pub fn get_revocation(conn: &Connection, agent_id: &Uuid) -> Result<Option<Revoc
 pub fn list_revocations(conn: &Connection) -> Result<Vec<RevocationEntry>> {
     let mut stmt = conn
         .prepare(
-            "SELECT agent_id, agent_name, reason, revoked_by, revoked_at, signature
+            "SELECT agent_id, agent_name, reason, revoked_by, revoked_at, signature, pq_signature
              FROM revocations ORDER BY revoked_at DESC",
         )
         .context("Failed to prepare revocation query")?;
@@ -196,6 +227,7 @@ pub fn list_revocations(conn: &Connection) -> Result<Vec<RevocationEntry>> {
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(|_| Utc::now()),
                 signature: row.get(5)?,
+                pq_signature: row.get(6)?,
             })
         })
         .context("Failed to execute revocation query")?
@@ -205,10 +237,38 @@ pub fn list_revocations(conn: &Connection) -> Result<Vec<RevocationEntry>> {
     Ok(entries)
 }
 
-/// Verify a revocation entry's signature.
+/// Verify a revocation entry's Ed25519 signature.
 pub fn verify_revocation(entry: &RevocationEntry, public_key_b64: &str) -> Result<bool> {
     let payload = revocation_payload(&entry.agent_id, &entry.reason, &entry.revoked_at);
     crypto::verify(public_key_b64, payload.as_bytes(), &entry.signature)
+}
+
+/// Verify a revocation entry's signatures (both Ed25519 and ML-DSA-65 if present).
+///
+/// For hybrid cards, both signatures MUST verify. If only Ed25519 signature
+/// exists (legacy revocation), only classical verification is performed.
+pub fn verify_revocation_hybrid(
+    entry: &RevocationEntry,
+    ed25519_public_key_b64: &str,
+    pq_public_key_b64: Option<&str>,
+) -> Result<bool> {
+    let payload = revocation_payload(&entry.agent_id, &entry.reason, &entry.revoked_at);
+
+    // Always verify Ed25519
+    let ed_valid = crypto::verify(ed25519_public_key_b64, payload.as_bytes(), &entry.signature)?;
+    if !ed_valid {
+        return Ok(false);
+    }
+
+    // If PQ signature is present, verify it too (both MUST pass for hybrid)
+    if let (Some(pq_sig), Some(pq_pub)) = (&entry.pq_signature, pq_public_key_b64) {
+        let pq_valid = crypto::mldsa_verify(pq_pub, payload.as_bytes(), pq_sig)?;
+        return Ok(pq_valid);
+    }
+
+    // If entry has PQ sig but no PQ public key was provided, we can't verify PQ part
+    // This is acceptable for backward compatibility (classical-only verification)
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -288,6 +348,45 @@ mod tests {
         let (_sk2, vk2) = crypto::generate_keypair();
         let wrong_pub = crypto::encode_public_key(&vk2);
         assert!(!verify_revocation(&entry, &wrong_pub).unwrap());
+    }
+
+    #[test]
+    fn test_revoke_hybrid_and_verify() {
+        let tmp = NamedTempFile::new().unwrap();
+        let conn = open_db_at(tmp.path()).unwrap();
+
+        let (ed_key, ed_vk) = crypto::generate_keypair();
+        let ed_pub = crypto::encode_public_key(&ed_vk);
+        let agent_id = Uuid::new_v4();
+
+        // Generate ML-DSA-65 keypair
+        let pq_kp = crypto::generate_mldsa_keypair().unwrap();
+        let pq_pub = crypto::encode_mldsa_public_key(&pq_kp.public_key_bytes);
+
+        // Hybrid revocation
+        let entry = revoke_hybrid(
+            &conn,
+            &agent_id,
+            "hybrid-agent",
+            "quantum threat",
+            "self",
+            &ed_key,
+            Some(&pq_kp.secret_key_bytes),
+        )
+        .unwrap();
+
+        assert!(entry.pq_signature.is_some());
+
+        // Both signatures verify
+        assert!(verify_revocation_hybrid(&entry, &ed_pub, Some(&pq_pub)).unwrap());
+
+        // Wrong PQ key fails
+        let pq_kp2 = crypto::generate_mldsa_keypair().unwrap();
+        let wrong_pq = crypto::encode_mldsa_public_key(&pq_kp2.public_key_bytes);
+        assert!(!verify_revocation_hybrid(&entry, &ed_pub, Some(&wrong_pq)).unwrap());
+
+        // Classical-only verification still works (backward compat)
+        assert!(verify_revocation(&entry, &ed_pub).unwrap());
     }
 
     #[test]

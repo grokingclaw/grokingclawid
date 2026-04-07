@@ -3,6 +3,10 @@
 //! Checks whether an outbound request is allowed by the agent's
 //! delegation chain. Operates at the domain level for HTTPS (CONNECT)
 //! and at the domain + path level for HTTP.
+//!
+//! OAuth integration: domain-level scope is enforced here; OAuth token
+//! injection happens in oauth.rs after scope check passes. OAuth domain
+//! bindings use the same domain matching logic.
 
 use std::collections::{HashSet, VecDeque};
 use url::Url;

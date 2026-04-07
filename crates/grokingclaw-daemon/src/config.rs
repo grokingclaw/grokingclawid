@@ -29,6 +29,8 @@ pub struct DaemonConfig {
     pub registry: RegistrySection,
     #[serde(default)]
     pub a2a: A2aSection,
+    #[serde(default)]
+    pub oauth: OAuthSection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +124,41 @@ pub struct A2aSection {
     /// Agent card discovery (GET /.well-known/) is always public.
     #[serde(default = "default_true")]
     pub require_auth: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuthSection {
+    /// Enable the OAuth 2.0 bridge for agents.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Proactive refresh buffer: refresh tokens this many seconds before expiry.
+    #[serde(default = "default_refresh_buffer")]
+    pub refresh_buffer_seconds: i64,
+    /// Allow the device authorization grant (RFC 8628) for headless agents.
+    #[serde(default = "default_true")]
+    pub allow_device_grant: bool,
+    /// Allow RFC 8693 token exchange (ClawID identity → OAuth token).
+    #[serde(default)]
+    pub allow_token_exchange: bool,
+    /// Callback listener port for authorization code flow (0 = auto-assign).
+    #[serde(default)]
+    pub callback_port: u16,
+}
+
+fn default_refresh_buffer() -> i64 {
+    60
+}
+
+impl Default for OAuthSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            refresh_buffer_seconds: default_refresh_buffer(),
+            allow_device_grant: true,
+            allow_token_exchange: false,
+            callback_port: 0,
+        }
+    }
 }
 
 fn default_a2a_port() -> u16 {
@@ -247,6 +284,7 @@ impl Default for DaemonConfig {
             updates: UpdatesSection::default(),
             registry: RegistrySection::default(),
             a2a: A2aSection::default(),
+            oauth: OAuthSection::default(),
         }
     }
 }

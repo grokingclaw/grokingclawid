@@ -15,8 +15,9 @@ serde_json = "1.0"
 chrono = "0.4"
 uuid = { version = "1.6", features = ["v4"] }
 base64 = "0.21"
-tokio = { version = "1.2", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.2", features = ["rt-multi-thread", "macros", "net", "io-util"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+dirs = "5.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"
