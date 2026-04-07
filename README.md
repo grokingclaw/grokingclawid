@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-119%20passing-green.svg)](#tests)
+[![Tests](https://img.shields.io/badge/tests-134%20passing-green.svg)](#tests)
 [![Version](https://img.shields.io/badge/version-0.4.1-brightgreen.svg)](CHANGELOG.md)
 [![CI](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml/badge.svg)](https://github.com/grokingclaw/grokingclawid/actions/workflows/ci.yml)
 
@@ -24,6 +24,7 @@ GrokingClawID creates, manages, and verifies unforgeable cryptographic identitie
 | **MCP auth guard** | Wrap any MCP server with identity enforcement |
 | **Challenge-response** | Mutual authentication without shared secrets |
 | **HTTP signatures** | RFC 9421 request signing (classical + PQ) |
+| **OAuth 2.0 bridge** | Transparent token injection, encrypted store, RFC 8693 exchange |
 | **Audit log** | Hash-chained, signed, tamper-evident (\x00-delimited fields) |
 | **IOTA wallet** | Agent-to-agent payments (same Ed25519 key), testnet funded |
 | **MCP tool server** | Expose all operations to MCP-compatible agents |
@@ -39,8 +40,8 @@ cargo install --path crates/grokingclawid-cli
 
 # Or build everything (CLI + daemon)
 cargo build --release
-# → target/release/grokingclawid  (CLI, ~4.7MB)
-# → target/release/grokingclaw    (daemon)
+# → target/release/grokingclawid  (CLI, ~5.1MB)
+# → target/release/grokingclaw    (daemon, ~6.4MB)
 ```
 
 **Requirements:** Rust 1.70+. No runtime dependencies.
@@ -95,6 +96,22 @@ grokingclawid audit --last 24h
 
 # Revoke a compromised card
 grokingclawid revoke --agent-card ./id/agent-card.json --key ./id/agent-key.pem --reason "key compromised"
+
+# OAuth 2.0 — register a provider for an agent
+grokingclawid oauth register \
+  --agent my-agent \
+  --provider github \
+  --client-id Iv1.abc123 \
+  --token-url https://github.com/login/oauth/access_token \
+  --scopes "repo read:org" \
+  --domains api.github.com \
+  --grant-type authorization_code
+
+# OAuth — start authorization flow
+grokingclawid oauth authorize --agent my-agent --registration gh-001
+
+# OAuth — check token status
+grokingclawid oauth status --agent my-agent
 ```
 
 ## MCP Auth Guard
@@ -131,7 +148,7 @@ Works with Claude Code, Codex, Cursor, or any MCP-compatible runtime.
 │              Cryptographic Identity Foundation               │
 │                                                             │
 │  Ed25519 + ML-DSA-65 │ A2A │ SPIFFE │ RFC 9421 │ MCP Guard │
-│  Delegation │ Challenge │ Rotation │ Revocation │ Audit     │
+│  Delegation │ Challenge │ Rotation │ Revocation │ OAuth 2.0 │
 ├─────────────────────────────────────────────────────────────┤
 │                      Agent Runtime                          │
 │         (Claude Code, Codex, Gemini, CrewAI, etc.)          │
@@ -168,18 +185,18 @@ grokingclawid/
 └── LICENSE                       # Apache 2.0
 ```
 
-**~15,500 lines of Rust** across 4 crates. 119 tests. Security audited.
+**~18,000 lines of Rust** across 4 crates. 134 tests. Security audited.
 
 ## Tests
 
 ```bash
 cargo test
-# 119 passed, 0 failed, 0 warnings
-#   44 — core (crypto, license, audit, revocation, challenge, httpsig)
-#   10 — proxy (scope, signing, tunneling)
+# 134 passed, 0 failed
+#   49 — core (crypto, license, audit, revocation, challenge, httpsig)
+#   17 — proxy (scope, signing, OAuth cache, domain matching)
 #    9 — daemon (config, supervisor, birth, mesh, templates, A2A)
 #   13 — CLI integration tests
-#   42 — core unit tests
+#   45 — core unit tests (incl. hybrid revocation)
 #    1 — doctest (httpsig example)
 ```
 
@@ -201,6 +218,8 @@ Exercises: identity → template → birth → A2A → challenge → rotation �
 | RFC 9421 | HTTP Message Signatures |
 | Google A2A | Agent Card export |
 | SPIFFE | Workload identity URIs |
+| OAuth 2.0 | Token bridge (Auth Code+PKCE, Device Grant, Client Creds) |
+| RFC 8693 | Token exchange (ClawID identity → OAuth token) |
 | MCP | Auth guard + tool server |
 
 ## NIST Submission

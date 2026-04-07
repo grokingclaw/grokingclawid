@@ -4,6 +4,31 @@ All notable changes to GrokingClawID are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.2] — 2026-04-07
+
+### Added
+- **OAuth 2.0 bridge** — seamless token injection for agents accessing external APIs (GitHub, Google, OpenAI, etc.)
+  - `grokingclaw-proxy/src/oauth.rs` — in-memory token cache with domain matching (exact + wildcard), proactive refresh via daemon IPC
+  - `grokingclaw-daemon/src/oauth_store.rs` — ChaCha20-Poly1305 encrypted per-agent token storage (key derived from Ed25519 via HKDF-SHA256)
+  - `grokingclaw-daemon/src/oauth_flow.rs` — Authorization Code+PKCE, Device Grant (RFC 8628), Client Credentials, Token Refresh, RFC 8693 Token Exchange
+  - 8 IPC methods: `oauth.register`, `oauth.authorize`, `oauth.callback`, `oauth.refresh`, `oauth.revoke`, `oauth.list`, `oauth.status`, `oauth.exchange`
+  - 5 MCP tools: `clawid_oauth_register`, `clawid_oauth_authorize`, `clawid_oauth_status`, `clawid_oauth_revoke`, `clawid_oauth_exchange`
+  - CLI subcommand: `grokingclawid oauth register|authorize|status|revoke|exchange`
+  - Delegation-aware scope narrowing (child agent's OAuth scopes/domains MUST be subset of parent's)
+  - Cascade revocation (revoking parent's OAuth registration revokes all children)
+  - Proxy injects Bearer tokens between scope check and RFC 9421 signing (signature covers the Authorization header)
+
+### Security
+- **Hybrid revocation** — `revoke_hybrid()` + `verify_revocation_hybrid()` with ML-DSA-65 post-quantum signature. Both Ed25519 and ML-DSA-65 MUST validate for hybrid cards.
+- **Hybrid proxy signing** — `RequestSigner` now emits `Signature-PQ` header alongside classical `Signature` for hybrid agents.
+- **Birth protocol PQ support** — `BirthRequest` now includes `agent_pq_public_key` and `crypto_scheme` fields.
+- **Typed SQL bindings** — audit `query_entries()` uses `Box<dyn ToSql>` for proper `i64` timestamps instead of string-based params.
+
+### Changed
+- Test suite expanded to **134 tests** (from 119): hybrid revocation, OAuth cache, domain matching
+- Binary sizes: CLI 5.1MB, daemon 6.4MB (release, LTO + strip + panic=abort)
+- ~18,000 lines of Rust across 4 crates (from ~15,500)
+
 ## [0.4.1] — 2026-04-03
 
 ### Security
